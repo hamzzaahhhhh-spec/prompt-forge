@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { Clock3, Columns2, Sparkles } from "lucide-react";
 
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { ModeSelector } from "@/components/ModeSelector";
 import { PromptInput } from "@/components/PromptInput";
 import { PromptOutput } from "@/components/PromptOutput";
+import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { usePromptStore } from "@/lib/store";
 import type {
   PromptMode,
@@ -18,6 +19,7 @@ import type {
 } from "@/lib/types";
 
 const PAGE_STAGGER = 0.06;
+const WELCOME_KEY = "promptforge:welcome-complete";
 
 export default function Home() {
   const {
@@ -48,10 +50,37 @@ export default function Home() {
   } = usePromptStore();
 
   const [activeStage, setActiveStage] = useState<string>("idle");
+  const [welcomeState, setWelcomeState] = useState<"loading" | "visible" | "exiting" | "hidden">("loading");
 
   useEffect(() => {
     hydrateHistory();
   }, [hydrateHistory]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const seenWelcome = window.localStorage.getItem(WELCOME_KEY) === "1";
+    setWelcomeState(seenWelcome ? "hidden" : "visible");
+  }, []);
+
+  const handleWelcomeContinue = useCallback(() => {
+    if (welcomeState !== "visible") {
+      return;
+    }
+
+    setWelcomeState("exiting");
+
+    window.setTimeout(() => {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(WELCOME_KEY, "1");
+      }
+      setWelcomeState("hidden");
+    }, 620);
+  }, [welcomeState]);
+
+  const welcomeVisible = welcomeState === "visible" || welcomeState === "exiting";
 
   const selectedPrompt = useMemo(() => {
     if (!result) {
@@ -195,7 +224,25 @@ export default function Home() {
   );
 
   return (
-    <div className="relative pb-16">
+    <>
+      <AnimatePresence>
+        {welcomeVisible ? (
+          <WelcomeScreen
+            isExiting={welcomeState === "exiting"}
+            onContinue={handleWelcomeContinue}
+          />
+        ) : null}
+      </AnimatePresence>
+
+      <motion.div
+        animate={{
+          opacity: welcomeVisible ? 0.32 : 1,
+          scale: welcomeVisible ? 0.988 : 1,
+          filter: welcomeVisible ? "blur(2px)" : "blur(0px)",
+        }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className={`relative pb-16 ${welcomeVisible ? "pointer-events-none select-none" : ""}`}
+      >
       <motion.header
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -294,6 +341,7 @@ export default function Home() {
       </main>
 
       <HistoryPanel />
-    </div>
+      </motion.div>
+    </>
   );
 }
