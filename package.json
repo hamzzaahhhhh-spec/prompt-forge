@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "manager:realtime": "powershell -ExecutionPolicy Bypass -File ./scripts/realtime-manager.ps1"
   },
   "dependencies": {
     "lenis": "1.1.16",
