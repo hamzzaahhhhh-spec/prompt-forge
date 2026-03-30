@@ -9,11 +9,6 @@ import type {
 
 const STYLE_TO_TYPE: Record<PromptStyle, PromptType> = {
   general: "general",
-  code: "coding",
-  research: "research",
-  business: "business",
-  creative: "creative",
-  image: "image",
 };
 
 const INJECTION_PATTERNS = [
@@ -29,13 +24,9 @@ const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
 const SECTION_HEADERS = [
-  "Role:",
-  "Objective:",
-  "Context:",
-  "Step-by-step instructions:",
+  "Prompt:",
+  "Your response must include:",
   "Constraints:",
-  "Output format:",
-  "Tone/style:",
 ] as const;
 
 type InferredProfile = {
@@ -43,8 +34,16 @@ type InferredProfile = {
   tone: string;
   outputFormat: string;
   lengthTarget: string;
-  objectiveFocus: string;
+  roleLead: string;
+  taskLine: string;
 };
+
+type PromptDomain =
+  | "agriculture"
+  | "health"
+  | "finance"
+  | "legal"
+  | "general";
 
 export function sanitizeInput(input: string): string {
   let sanitized = input.replace(/\0/g, "");
@@ -67,7 +66,7 @@ export function sanitizeInput(input: string): string {
 }
 
 export function classifyPromptType(input: string, style?: PromptStyle): PromptType {
-  if (style && STYLE_TO_TYPE[style]) {
+  if (style && style !== "general" && STYLE_TO_TYPE[style]) {
     return STYLE_TO_TYPE[style];
   }
 
@@ -93,7 +92,14 @@ export function classifyPromptType(input: string, style?: PromptStyle): PromptTy
     return "image";
   }
 
-  if (/(study plan|quiz|lesson|exam|memorize|learning objectives)/i.test(text)) {
+  const hasStudySignals =
+    /(study plan|quiz|lesson|exam|memorize|learning objectives|syllabus|chapter|revision|board exam|class\s*\d+|grade\s*\d+|\b11th\b|\b12th\b)/i.test(
+      text,
+    ) ||
+    (/(learn|master|improve|prepare)/i.test(text) &&
+      /(math|mathematics|physics|chemistry|biology|history|geography|english|economics|subject)/i.test(text));
+
+  if (hasStudySignals) {
     return "study";
   }
 
@@ -133,40 +139,29 @@ export function detectMissingDetails(input: string): MissingDetail[] {
 
 const typeHints: Record<PromptType, string> = {
   coding:
-    "Specify language/runtime, architecture decisions, validation, testing strategy, and edge-case handling.",
+    "Define language/runtime assumptions, architecture boundaries, validation logic, testing strategy, and edge-case handling.",
   research:
-    "Require clear research question framing, evidence quality checks, source handling, and citation behavior.",
+    "Require clear research framing, evidence quality checks, source handling, and citation behavior.",
   business:
-    "Define business objective, stakeholders, measurable outcomes, assumptions, and implementation constraints.",
+    "Define objective, stakeholders, measurable outcomes, assumptions, and implementation constraints.",
   creative:
     "Define narrative intent, style influences, emotional tone, constraints, and quality criteria.",
   image:
-    "Include subject, style, lighting, camera/composition, color palette, and negative prompt constraints.",
+    "Include subject, style, lighting, composition, color palette, and negative prompt constraints.",
   study:
     "Include learner level, topic scope, pacing, milestones, and practice/assessment format.",
   general:
-    "Demand clear objective, constraints, format expectations, and output quality checks.",
+    "Demand clear objective, constraints, format expectations, and quality checks.",
 };
 
 function buildGapGuidance(missing: MissingDetail[]): string[] {
-  return missing.map((detail) => {
-    switch (detail) {
-      case "audience":
-        return "Audience: infer and state the likely target audience explicitly.";
-      case "tone":
-        return "Tone: select an appropriate tone and state it explicitly.";
-      case "format":
-        return "Format: define an explicit output structure (headings, bullets, or JSON).";
-      case "length":
-        return "Length: include a practical length target (brief/medium/detailed).";
-      case "constraints":
-        return "Constraints: add concrete do/do-not rules and quality boundaries.";
-      case "output_type":
-        return "Output Type: define exactly what artifact should be returned.";
-      default:
-        return "Missing detail: resolve ambiguity explicitly.";
-    }
-  });
+  if (missing.length === 0) {
+    return [];
+  }
+
+  return [
+    "If critical details are missing, state assumptions briefly and provide the safest practical path.",
+  ];
 }
 
 function firstSentence(text: string): string {
@@ -225,20 +220,46 @@ function inferTone(input: string, type: PromptType): string {
 function inferOutputFormat(type: PromptType): string {
   switch (type) {
     case "coding":
-      return "Markdown sections with architecture, implementation plan, test matrix, and edge cases.";
+      return "Use markdown headings and numbered steps, with code blocks only where needed.";
     case "research":
-      return "Structured report with thesis, method, findings, citations approach, and limitations.";
+      return "Use markdown headings with evidence-backed claims, assumptions, and limitations.";
     case "business":
-      return "Action plan with objectives, KPIs, assumptions, timeline, risks, and owner-by-owner actions.";
+      return "Use concise markdown with action tables (owner, KPI, timeline, risk).";
     case "creative":
-      return "Creative brief with thematic intent, stylistic guidance, constraints, and final deliverable spec.";
+      return "Use markdown sections with clear constraints and an explicit final deliverable.";
     case "image":
-      return "Image-prompt block including Subject, Style, Lighting, Composition, Camera details, and Negative Prompt.";
+      return "Use a deterministic image-prompt template with labeled fields.";
     case "study":
-      return "Learning blueprint with modules, progression, active recall tasks, and assessment checkpoints.";
+      return "Use markdown headings with numbered actions and checkpoints.";
     default:
-      return "Clean markdown with numbered steps, strict constraints, and explicit final output section.";
+      return "Use clean markdown with explicit headings and numbered steps.";
   }
+}
+
+function inferDomain(input: string): PromptDomain {
+  const text = input.toLowerCase();
+
+  if (
+    /(planofix|pgr|spray|spraying|dose per liter|crop|fertilizer|fertiliser|pesticide|herbicide|fungicide|agronomy|acre|hectare|foliar|plant growth regulator|tank mix)/i.test(
+      text,
+    )
+  ) {
+    return "agriculture";
+  }
+
+  if (/(symptom|dose|dosage|medication|treatment|side effect|diagnosis|clinical|patient)/i.test(text)) {
+    return "health";
+  }
+
+  if (/(tax|portfolio|investment|loan|interest rate|cash flow|valuation|budget)/i.test(text)) {
+    return "finance";
+  }
+
+  if (/(contract|clause|liability|legal|law|compliance|jurisdiction|statute)/i.test(text)) {
+    return "legal";
+  }
+
+  return "general";
 }
 
 function inferLengthTarget(input: string): string {
@@ -258,71 +279,170 @@ function inferLengthTarget(input: string): string {
   return "Balanced depth (roughly 260-420 words).";
 }
 
-function inferObjectiveFocus(input: string, type: PromptType): string {
-  const seed = firstSentence(input);
-  return `Translate the core intent \"${seed}\" into an elite ${type} prompt that is specific, executable, and quality-controlled.`;
+function inferRoleLead(input: string, type: PromptType, domain: PromptDomain): string {
+  if (type === "study" && /(math|mathematics|algebra|geometry|trigonometry|calculus)/i.test(input)) {
+    return "Act as an expert mathematics educator and cognitive learning scientist.";
+  }
+
+  if (domain === "agriculture") {
+    return "Act as an agricultural extension agronomist with practical field-safety expertise in plant growth regulators and spray scheduling.";
+  }
+
+  if (domain === "health") {
+    return "Act as a clinical decision-support assistant focused on safety, uncertainty disclosure, and evidence-based guidance.";
+  }
+
+  if (domain === "finance") {
+    return "Act as a financial planning analyst focused on risk-aware, assumptions-explicit recommendations.";
+  }
+
+  if (domain === "legal") {
+    return "Act as a legal information assistant that provides structured, jurisdiction-aware guidance without giving definitive legal advice.";
+  }
+
+  switch (type) {
+    case "coding":
+      return "Act as a senior software engineer and systems architect.";
+    case "research":
+      return "Act as a senior researcher and evidence synthesis specialist.";
+    case "business":
+      return "Act as a strategy consultant focused on measurable execution.";
+    case "creative":
+      return "Act as a creative director and narrative craft specialist.";
+    case "image":
+      return "Act as a world-class visual prompt engineer for image generation.";
+    case "study":
+      return "Act as an expert educator and cognitive learning strategist.";
+    default:
+      return "Act as a domain expert advisor focused on clear, actionable outcomes.";
+  }
+}
+
+function normalizeIntentText(text: string): string {
+  return text
+    .replace(/\bleran\b/gi, "learn")
+    .replace(/\bquicky\b/gi, "quickly")
+    .replace(/\bteh\b/gi, "the")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function inferTaskLine(input: string, type: PromptType, domain: PromptDomain): string {
+  const intent = normalizeIntentText(firstSentence(input)).replace(/[.!?]+$/g, "");
+
+  if (domain === "agriculture") {
+    return `Provide a safety-first, practical crop-management answer to: ${intent}.`;
+  }
+
+  if (domain === "health") {
+    return `Provide a cautious, evidence-based response to: ${intent}.`;
+  }
+
+  if (/^how to\s+/i.test(intent)) {
+    const goal = intent.replace(/^how to\s+/i, "").trim();
+    if (type === "study") {
+      return `Provide a scientifically grounded, step-by-step strategy to ${goal} in the shortest realistic time frame.`;
+    }
+
+    return `Provide a practical, step-by-step strategy to ${goal} with clear reasoning and implementation detail.`;
+  }
+
+  return `Address this request with precise, actionable guidance: \"${intent}\".`;
 }
 
 function inferProfile(input: string, type: PromptType): InferredProfile {
+  const domain = inferDomain(input);
+
   return {
     audience: inferAudience(input, type),
     tone: inferTone(input, type),
     outputFormat: inferOutputFormat(type),
     lengthTarget: inferLengthTarget(input),
-    objectiveFocus: inferObjectiveFocus(input, type),
+    roleLead: inferRoleLead(input, type, domain),
+    taskLine: inferTaskLine(input, type, domain),
   };
 }
 
-function buildInstructionSteps(type: PromptType): string[] {
-  const common = [
-    "Extract and preserve the true intent from the source material.",
-    "Resolve ambiguity by introducing explicit assumptions only where needed.",
-    "Sequence the task into execution-ready actions with no vague verbs.",
-    "Specify quality checks so output can be audited for completeness.",
-  ];
+function buildResponseSections(type: PromptType, input: string): string[] {
+  const domain = inferDomain(input);
+
+  const class11Math =
+    type === "study" &&
+    /(class\s*11|11th|grade\s*11|\bxi\b)/i.test(input) &&
+    /(math|mathematics|algebra|geometry|trigonometry|calculus)/i.test(input);
+
+  if (class11Math) {
+    return [
+      "Learning Framework: explain conceptual clarity -> problem-solving -> mastery, using active recall, spaced repetition, and deliberate practice.",
+      "Syllabus Breakdown (Class 11): organize Algebra, Trigonometry, Calculus basics, Coordinate Geometry, and Statistics; identify foundational and high-weight topics.",
+      "Daily and Weekly Study Plan: provide a realistic schedule with hours per day, revision cycles, and theory/practice/revision split.",
+      "Problem-Solving Strategy: define a step-by-step method for difficult questions, including error analysis and pattern recognition.",
+      "Memory and Retention Techniques: include practical methods for formula retention and long-term concept recall.",
+      "Common Mistakes to Avoid: list critical mistakes and exact correction steps.",
+      "Acceleration Techniques: show how to compress learning time without sacrificing understanding.",
+      "Verification and Self-Testing: include measurable checkpoints, mock-test cadence, and adjustment rules.",
+    ];
+  }
+
+  if (domain === "agriculture") {
+    return [
+      "Direct recommendation first: provide the safest practical answer, then explain why.",
+      "Required context check: crop, growth stage, exact product formulation, concentration label, spray water volume, weather window, and tank-mix sequence.",
+      "Dosage and timing logic: explain how to decide whether post-spray application is appropriate and how interval timing changes risk.",
+      "Safety and compliance: prioritize product label instructions, local agricultural extension guidance, and phytotoxicity prevention.",
+      "Action plan: give a concise field-ready checklist for what to do now and what to verify before next spray.",
+    ];
+  }
 
   switch (type) {
     case "coding":
       return [
-        ...common,
-        "Define stack, architecture constraints, and implementation boundaries.",
-        "Include test strategy, edge cases, and failure-mode handling.",
+        "Technical context and assumptions.",
+        "Step-by-step implementation plan.",
+        "Validation and testing strategy.",
+        "Edge cases, failure modes, and mitigations.",
       ];
     case "research":
       return [
-        ...common,
-        "Require evidence quality ranking and citation-aware reasoning.",
-        "Add limitations, assumptions, and confidence qualifiers.",
+        "Research framing and key assumptions.",
+        "Evidence-based reasoning with source quality cues.",
+        "Findings and decision implications.",
+        "Limitations, risks, and confidence level.",
       ];
     case "business":
       return [
-        ...common,
-        "Map actions to measurable KPIs, owners, and time horizons.",
-        "Include risk register with mitigation triggers.",
+        "Objective and success metrics.",
+        "Execution plan with owners and timeline.",
+        "Risk register with mitigation triggers.",
+        "Review checkpoints and decision criteria.",
       ];
     case "creative":
       return [
-        ...common,
-        "Define creative direction, style constraints, and originality guardrails.",
-        "Require a final polish pass for rhythm, coherence, and emotional impact.",
+        "Creative direction and style boundaries.",
+        "Structure and progression of the output.",
+        "Originality guardrails and quality checks.",
+        "Final polish and consistency checklist.",
       ];
     case "image":
       return [
-        ...common,
-        "Specify subject hierarchy, composition geometry, and lighting behavior.",
-        "Include a deliberate negative prompt to avoid unwanted artifacts.",
+        "Subject and focal hierarchy.",
+        "Style, color palette, and visual mood.",
+        "Lighting, composition, and camera details.",
+        "Negative prompt constraints and artifact prevention.",
       ];
     case "study":
       return [
-        ...common,
-        "Build progression milestones with active recall and spaced repetition.",
-        "Add checkpoints and adaptation rules for weak areas.",
+        "Learning roadmap with milestones.",
+        "Practice strategy and revision cycles.",
+        "Retention methods and memory reinforcement.",
+        "Self-testing rubric and adaptation rules.",
       ];
     default:
       return [
-        ...common,
-        "Elevate the result with practical examples and decision criteria.",
-        "End with a final verification checklist before output.",
+        "Direct answer first in 2-4 lines.",
+        "Concise reasoning with assumptions and decision criteria.",
+        "Step-by-step practical actions.",
+        "Risks, caveats, and a final verification checklist.",
       ];
   }
 }
@@ -345,70 +465,45 @@ export function expandPrompt(options: {
   missing: MissingDetail[];
 }): string {
   const { sanitized, type, style, missing } = options;
+  const domain = inferDomain(sanitized);
   const gapGuidance = buildGapGuidance(missing);
   const profile = inferProfile(sanitized, type);
-  const steps = buildInstructionSteps(type);
+  const sections = buildResponseSections(type, sanitized);
 
-  const imageExtra =
-    type === "image"
-      ? [
-          "- Image-specific requirements:",
-          "  - Subject and focal hierarchy",
-          "  - Style references and visual era",
-          "  - Lighting model and atmosphere",
-          "  - Camera framing and composition",
-          "  - Negative prompt for exclusion",
-        ].join("\n")
-      : "";
-
-  const codeExtra =
-    type === "coding"
-      ? [
-          "- Code-specific requirements:",
-          "  - Language/runtime and version assumptions",
-          "  - Architecture decisions and tradeoff rationale",
-          "  - Testing strategy (unit/integration/e2e)",
-          "  - Edge cases and failure recovery behavior",
-        ].join("\n")
-      : "";
+  const domainConstraintByType =
+    domain === "agriculture"
+      ? "Do not invent exact chemical dose values when product-label concentration, crop stage, or local label constraints are unknown; ask for missing details and give the safest fallback path."
+      : domain === "health"
+        ? "Do not provide unsafe or absolute medical instructions without uncertainty qualifiers and escalation guidance."
+        : domain === "finance"
+          ? "Clearly separate assumptions from facts and include risk disclosure for recommendations."
+          : domain === "legal"
+            ? "Provide informational guidance only and include a note to verify with a qualified professional in the relevant jurisdiction."
+            : "When key details are missing, ask targeted clarifying questions and provide a safe default approach.";
 
   return [
-    "Role:",
-    `You are a world-class ${type} prompt architect and quality optimizer focused on high-stakes outputs.`,
+    "Prompt:",
+    profile.roleLead,
+    profile.taskLine,
     "",
-    "Objective:",
-    profile.objectiveFocus,
-    "",
-    "Context:",
-    `- Prompt type: ${type.toUpperCase()}`,
-    `- Preferred style: ${style.toUpperCase()}`,
-    `- Intended audience: ${profile.audience}`,
-    `- Source summary: ${summarizeContext(sanitized)}`,
-    "",
-    "Step-by-step instructions:",
-    ...steps.map((step, index) => `${index + 1}. ${step}`),
+    "Your response must include:",
+    ...sections.map((section) => `- ${section}`),
     "",
     "Constraints:",
     `- ${typeHints[type]}`,
-    "- Never answer the source content directly; only produce an improved prompt artifact.",
-    "- Remove generic filler and weak phrasing; every instruction must be concrete and testable.",
-    "- Preserve user intent while upgrading precision, depth, and execution quality.",
-    `- Target length: ${profile.lengthTarget}`,
+    `- Write for: ${profile.audience}`,
+    `- Tone: ${profile.tone}`,
+    `- Output format: ${profile.outputFormat}`,
+    `- Response length: ${profile.lengthTarget}`,
+    "- Use clear headings and numbered steps where applicable.",
+    `- ${domainConstraintByType}`,
     ...gapGuidance.map((line) => `- ${line}`),
-    imageExtra,
-    codeExtra,
+    "- Do not give vague advice.",
+    "- Provide actionable, step-by-step guidance and explain why each method works.",
+    "- Avoid unsupported claims; rely on established principles or clearly stated assumptions.",
+    "- Keep language high-signal, concrete, and testable.",
     "",
-    "Output format:",
-    `- ${profile.outputFormat}`,
-    "- Include explicit sections and deterministic formatting.",
-    "- Return only the upgraded prompt, without commentary.",
-    "",
-    "Tone/style:",
-    `- ${profile.tone}`,
-    "- High-signal, low-noise language with decisive action verbs.",
-    "",
-    "Source material to transform:",
-    sanitized,
+    "Return only the final answer.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -416,21 +511,20 @@ export function expandPrompt(options: {
 
 export function createVariants(expandedPrompt: string): PromptVariants {
   const compact = expandedPrompt
-    .replace(/Source material to transform:[\s\S]*$/m, "")
+    .replace(/\n- Length target:[^\n]*/m, "")
     .replace(/\n{2,}/g, "\n")
     .split("\n")
-    .slice(0, 22)
+    .slice(0, 18)
     .join("\n")
     .trim();
 
   const advanced = [
     expandedPrompt,
     "",
-    "Advanced optimization directives:",
-    "- Add failure-mode prevention rules for likely misunderstanding points.",
-    "- Include acceptance criteria that define what excellent output looks like.",
-    "- Add an internal quality checklist before finalizing the response.",
-    "- When ambiguity remains, state the assumption explicitly and proceed decisively.",
+    "Additional quality bar:",
+    "- Include explicit failure-case prevention notes.",
+    "- Add acceptance criteria for an excellent final answer.",
+    "- End with a concise self-check before finalizing.",
   ].join("\n");
 
   return {
@@ -447,17 +541,16 @@ export function scorePrompt(prompt: string, missing: MissingDetail[]): {
   const wordCount = prompt.split(/\s+/).filter(Boolean).length;
   const headingCount = (prompt.match(/^[A-Za-z][A-Za-z\-/ ]+:$/gm) ?? []).length;
   const hasConstraints = /constraints/i.test(prompt);
-  const hasFormat = /output\s+format/i.test(prompt);
   const sectionCoverage = SECTION_HEADERS.reduce(
     (count, section) => count + (prompt.includes(section) ? 1 : 0),
     0,
   );
-  const explicitSteps = (prompt.match(/^\d+\.\s+/gm) ?? []).length;
+  const explicitBullets = (prompt.match(/^-\s+/gm) ?? []).length;
 
-  const clarity = clamp(9 + sectionCoverage * 2 + Math.min(6, explicitSteps), 0, 25);
+  const clarity = clamp(9 + sectionCoverage * 3 + Math.min(6, explicitBullets), 0, 25);
   const specificity = clamp(10 + Math.floor(wordCount / 38) + (missing.length <= 2 ? 2 : 0), 0, 25);
   const constraints = clamp(10 + (hasConstraints ? 7 : 0) + (6 - missing.length), 0, 25);
-  const structure = clamp(8 + headingCount * 2 + sectionCoverage + (hasFormat ? 2 : 0), 0, 25);
+  const structure = clamp(8 + headingCount * 2 + sectionCoverage, 0, 25);
 
   const score = clamp(
     Math.round((clarity + specificity + constraints + structure) / 4),
@@ -479,10 +572,10 @@ export function scorePrompt(prompt: string, missing: MissingDetail[]): {
 export function explainChanges(type: PromptType, missing: MissingDetail[]): string {
   const resolved =
     missing.length > 0
-      ? `It inferred and filled missing details for ${missing.join(", ")} so the model receives concrete boundaries instead of ambiguity.`
+      ? `It inferred and filled missing details for ${missing.join(", ")} so the output has concrete boundaries instead of ambiguity.`
       : "It preserved your provided detail while sharpening each instruction into explicit, execution-ready constraints.";
 
-  return `The rewrite upgrades your input into an elite ${type} prompt with a strict structure: role, objective, context, sequential instructions, constraints, output format, and tone. ${resolved}`;
+  return `The rewrite upgrades your input into an elite ${type} prompt with a direct, runnable structure: Prompt, required response sections, output requirements, and constraints. ${resolved}`;
 }
 
 export function runPipeline(input: string, style: PromptStyle = "general"): PipelineResult {
