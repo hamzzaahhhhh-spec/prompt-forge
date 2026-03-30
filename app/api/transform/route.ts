@@ -6,7 +6,7 @@ import { callHuggingFaceChat } from "@/lib/providers/huggingface";
 import { callOllamaChat } from "@/lib/providers/ollama";
 import type { PromptMode, PromptStyle, StreamEvent, TransformResponse } from "@/lib/types";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 const MIN_LENGTH = 10;
 const MAX_LENGTH = 8000;
@@ -23,13 +23,9 @@ Your ONLY job is to rewrite the input into a high-quality, structured AI prompt.
 Return only the improved prompt unless metadata is explicitly requested.`;
 
 const REQUIRED_ELITE_SECTIONS = [
-  "Role:",
-  "Objective:",
-  "Context:",
-  "Step-by-step instructions:",
+  "Prompt:",
+  "Your response must include:",
   "Constraints:",
-  "Output format:",
-  "Tone/style:",
 ];
 
 type TransformPayload = {
@@ -176,7 +172,7 @@ export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
 
   if (rateLimitExceeded(ip)) {
-    recordAdminActivity({
+    await recordAdminActivity({
       requestedMode: "unknown",
       effectiveMode: "unknown",
       style: "unknown",
@@ -192,7 +188,7 @@ export async function POST(request: NextRequest) {
   try {
     payload = (await request.json()) as TransformPayload;
   } catch {
-    recordAdminActivity({
+    await recordAdminActivity({
       requestedMode: "unknown",
       effectiveMode: "unknown",
       style: "unknown",
@@ -204,7 +200,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (typeof payload.text !== "string") {
-    recordAdminActivity({
+    await recordAdminActivity({
       requestedMode: "unknown",
       effectiveMode: "unknown",
       style: "unknown",
@@ -217,7 +213,7 @@ export async function POST(request: NextRequest) {
 
   const requestedMode = toPromptMode(payload.mode);
   if (!requestedMode) {
-    recordAdminActivity({
+    await recordAdminActivity({
       requestedMode: "unknown",
       effectiveMode: "unknown",
       style: "unknown",
@@ -229,11 +225,11 @@ export async function POST(request: NextRequest) {
   }
 
   const style = toPromptStyle(payload.style);
-  const adminConfig = getAdminConfig();
+  const adminConfig = await getAdminConfig();
   const effectiveMode: PromptMode = adminConfig.forceLocalOnly ? "local" : requestedMode;
 
   if (adminConfig.maintenanceMode) {
-    recordAdminActivity({
+    await recordAdminActivity({
       requestedMode,
       effectiveMode,
       style,
@@ -251,7 +247,7 @@ export async function POST(request: NextRequest) {
   const cleaned = cleanInput(payload.text);
 
   if (cleaned.length < MIN_LENGTH || cleaned.length > MAX_LENGTH) {
-    recordAdminActivity({
+    await recordAdminActivity({
       requestedMode,
       effectiveMode,
       style,
@@ -271,8 +267,9 @@ export async function POST(request: NextRequest) {
     "Use this draft as baseline and return only the final improved prompt.",
     "Do not include commentary or markdown wrappers.",
     "Ensure the result keeps this exact section structure:",
-    "Role:, Objective:, Context:, Step-by-step instructions:, Constraints:, Output format:, Tone/style:",
+    "Prompt:, Your response must include:, Constraints:",
     "Rewrite with elite clarity, depth, and precision. Avoid generic wording.",
+    "End with: Return only the final answer.",
     "",
     pipeline.prompt,
   ].join("\n");
@@ -326,6 +323,18 @@ export async function POST(request: NextRequest) {
     type: pipeline.type,
   };
 
+  await recordAdminActivity({
+    requestedMode,
+    effectiveMode,
+    style,
+    status: "success",
+    latencyMs: Date.now() - requestStartedAt,
+    fallbackUsed: Boolean(providerWarning),
+    score: scoreResult.score,
+    type: pipeline.type,
+    errorCode: providerWarning?.code,
+  });
+
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       const send = (event: StreamEvent) => controller.enqueue(streamLine(event));
@@ -362,20 +371,9 @@ export async function POST(request: NextRequest) {
 
         send({ event: "result", data: result });
         send({ event: "done" });
-        recordAdminActivity({
-          requestedMode,
-          effectiveMode,
-          style,
-          status: "success",
-          latencyMs: Date.now() - requestStartedAt,
-          fallbackUsed: Boolean(providerWarning),
-          score: scoreResult.score,
-          type: pipeline.type,
-          errorCode: providerWarning?.code,
-        });
         controller.close();
       } catch (error) {
-        recordAdminActivity({
+        void recordAdminActivity({
           requestedMode,
           effectiveMode,
           style,
@@ -383,7 +381,7 @@ export async function POST(request: NextRequest) {
           latencyMs: Date.now() - requestStartedAt,
           fallbackUsed: Boolean(providerWarning),
           errorCode: "STREAM_SEND_FAILURE",
-        });
+        }).catch(() => undefined);
         send({ event: "error", message: "Streaming failed while sending response." });
         send({ event: "done" });
         controller.close();

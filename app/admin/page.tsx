@@ -59,6 +59,7 @@ export default function AdminPage() {
     try {
       const response = await fetch("/api/admin/stats", {
         method: "GET",
+        cache: "no-store",
         headers: {
           Authorization: `Bearer ${adminKey}`,
         },
@@ -114,6 +115,7 @@ export default function AdminPage() {
       try {
         const response = await fetch("/api/admin/stats", {
           method: "POST",
+          cache: "no-store",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${adminKey}`,
@@ -184,6 +186,13 @@ export default function AdminPage() {
         {error ? (
           <p className="mt-3 rounded-xl border border-score-low/60 bg-score-low/10 px-3 py-2 text-sm text-score-low">
             {error}
+          </p>
+        ) : null}
+
+        {snapshot ? (
+          <p className="mt-3 text-xs text-text-muted">
+            Storage: {snapshot.security.activityStorage.toUpperCase()} | Cross-instance reliability:{" "}
+            {snapshot.security.crossInstanceReliable ? "enabled" : "disabled"}
           </p>
         ) : null}
 
@@ -281,6 +290,14 @@ export default function AdminPage() {
                   <td className="py-2 text-text-muted">{item.errorCode ?? "-"}</td>
                 </tr>
               ))}
+
+              {snapshot && snapshot.recentActivities.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="py-6 text-center text-text-muted">
+                    No activity found yet. Trigger a transform request, then refresh.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>

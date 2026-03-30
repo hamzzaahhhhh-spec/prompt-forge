@@ -11,6 +11,7 @@
     "manager:realtime": "powershell -ExecutionPolicy Bypass -File ./scripts/realtime-manager.ps1"
   },
   "dependencies": {
+    "@vercel/blob": "^2.3.2",
     "lenis": "1.1.16",
     "lucide-react": "0.453.0",
     "motion": "11.11.17",

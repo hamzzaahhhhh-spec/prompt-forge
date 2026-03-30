@@ -47,5 +47,7 @@ export type AdminSnapshot = {
     logsContainRawContent: false;
     requiresAdminKey: true;
     transformSystemPromptLocked: true;
+    activityStorage: "kv" | "blob" | "memory";
+    crossInstanceReliable: boolean;
   };
 };

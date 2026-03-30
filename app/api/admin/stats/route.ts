@@ -5,7 +5,7 @@ import {
   updateAdminConfig,
 } from "@/lib/admin/realtime";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 type UpdateBody = {
   maintenanceMode?: boolean;
@@ -60,7 +60,8 @@ export async function GET(request: NextRequest) {
     return unauthorized();
   }
 
-  return NextResponse.json(getAdminSnapshot(), { status: 200 });
+  const snapshot = await getAdminSnapshot();
+  return NextResponse.json(snapshot, { status: 200 });
 }
 
 export async function POST(request: NextRequest) {
@@ -98,7 +99,8 @@ export async function POST(request: NextRequest) {
     next.forceLocalOnly = body.forceLocalOnly;
   }
 
-  updateAdminConfig(next);
+  await updateAdminConfig(next);
 
-  return NextResponse.json(getAdminSnapshot(), { status: 200 });
+  const snapshot = await getAdminSnapshot();
+  return NextResponse.json(snapshot, { status: 200 });
 }
