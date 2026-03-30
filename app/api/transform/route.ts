@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { getAdminConfig, recordAdminActivity } from "@/lib/admin/realtime";
 import { runPipeline, scorePrompt } from "@/lib/prompt-engine";
 import { callHuggingFaceChat } from "@/lib/providers/huggingface";
 import { callOllamaChat } from "@/lib/providers/ollama";
@@ -88,14 +89,7 @@ function toPromptMode(value: unknown): PromptMode | null {
 }
 
 function toPromptStyle(value: unknown): PromptStyle {
-  const styles: PromptStyle[] = [
-    "general",
-    "code",
-    "research",
-    "business",
-    "creative",
-    "image",
-  ];
+  const styles: PromptStyle[] = ["general"];
 
   if (typeof value === "string" && styles.includes(value as PromptStyle)) {
     return value as PromptStyle;
@@ -178,9 +172,18 @@ function toStructuredError(code: string, message: string, status: number) {
 }
 
 export async function POST(request: NextRequest) {
+  const requestStartedAt = Date.now();
   const ip = getClientIp(request);
 
   if (rateLimitExceeded(ip)) {
+    recordAdminActivity({
+      requestedMode: "unknown",
+      effectiveMode: "unknown",
+      style: "unknown",
+      status: "rate_limited",
+      latencyMs: Date.now() - requestStartedAt,
+      errorCode: "RATE_LIMIT",
+    });
     return toStructuredError("RATE_LIMIT", "Rate limit exceeded. Try again shortly.", 429);
   }
 
@@ -189,22 +192,73 @@ export async function POST(request: NextRequest) {
   try {
     payload = (await request.json()) as TransformPayload;
   } catch {
+    recordAdminActivity({
+      requestedMode: "unknown",
+      effectiveMode: "unknown",
+      style: "unknown",
+      status: "failed",
+      latencyMs: Date.now() - requestStartedAt,
+      errorCode: "INVALID_JSON",
+    });
     return toStructuredError("INVALID_JSON", "Request body must be valid JSON.", 400);
   }
 
   if (typeof payload.text !== "string") {
+    recordAdminActivity({
+      requestedMode: "unknown",
+      effectiveMode: "unknown",
+      style: "unknown",
+      status: "failed",
+      latencyMs: Date.now() - requestStartedAt,
+      errorCode: "INVALID_TEXT",
+    });
     return toStructuredError("INVALID_TEXT", "text must be a string.", 400);
   }
 
-  const mode = toPromptMode(payload.mode);
-  if (!mode) {
+  const requestedMode = toPromptMode(payload.mode);
+  if (!requestedMode) {
+    recordAdminActivity({
+      requestedMode: "unknown",
+      effectiveMode: "unknown",
+      style: "unknown",
+      status: "failed",
+      latencyMs: Date.now() - requestStartedAt,
+      errorCode: "INVALID_MODE",
+    });
     return toStructuredError("INVALID_MODE", "mode must be local or hosted.", 400);
   }
 
   const style = toPromptStyle(payload.style);
+  const adminConfig = getAdminConfig();
+  const effectiveMode: PromptMode = adminConfig.forceLocalOnly ? "local" : requestedMode;
+
+  if (adminConfig.maintenanceMode) {
+    recordAdminActivity({
+      requestedMode,
+      effectiveMode,
+      style,
+      status: "blocked",
+      latencyMs: Date.now() - requestStartedAt,
+      errorCode: "MAINTENANCE_MODE",
+    });
+    return toStructuredError(
+      "MAINTENANCE_MODE",
+      "Transforms are temporarily paused by admin.",
+      503,
+    );
+  }
+
   const cleaned = cleanInput(payload.text);
 
   if (cleaned.length < MIN_LENGTH || cleaned.length > MAX_LENGTH) {
+    recordAdminActivity({
+      requestedMode,
+      effectiveMode,
+      style,
+      status: "failed",
+      latencyMs: Date.now() - requestStartedAt,
+      errorCode: "INVALID_LENGTH",
+    });
     return toStructuredError(
       "INVALID_LENGTH",
       `text length must be between ${MIN_LENGTH} and ${MAX_LENGTH} characters.`,
@@ -229,15 +283,17 @@ export async function POST(request: NextRequest) {
   try {
     providerResult = await callProvider({
       input: providerPrompt,
-      mode,
+      mode: effectiveMode,
       style,
       type: pipeline.type,
     });
   } catch (error) {
-    const isTimeout =
-      error instanceof DOMException
-        ? error.name === "AbortError"
-        : String(error).toLowerCase().includes("timeout");
+    const isAbortError =
+      typeof error === "object" &&
+      error !== null &&
+      "name" in error &&
+      (error as { name?: string }).name === "AbortError";
+    const isTimeout = isAbortError || String(error).toLowerCase().includes("timeout");
 
     providerWarning = {
       code: isTimeout ? "PROVIDER_TIMEOUT_FALLBACK" : "PROVIDER_FAILED_FALLBACK",
@@ -306,8 +362,28 @@ export async function POST(request: NextRequest) {
 
         send({ event: "result", data: result });
         send({ event: "done" });
+        recordAdminActivity({
+          requestedMode,
+          effectiveMode,
+          style,
+          status: "success",
+          latencyMs: Date.now() - requestStartedAt,
+          fallbackUsed: Boolean(providerWarning),
+          score: scoreResult.score,
+          type: pipeline.type,
+          errorCode: providerWarning?.code,
+        });
         controller.close();
       } catch (error) {
+        recordAdminActivity({
+          requestedMode,
+          effectiveMode,
+          style,
+          status: "failed",
+          latencyMs: Date.now() - requestStartedAt,
+          fallbackUsed: Boolean(providerWarning),
+          errorCode: "STREAM_SEND_FAILURE",
+        });
         send({ event: "error", message: "Streaming failed while sending response." });
         send({ event: "done" });
         controller.close();

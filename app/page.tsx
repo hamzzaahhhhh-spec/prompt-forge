@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import Link from "next/link";
 import { Clock3, Columns2, Sparkles } from "lucide-react";
 
 import { HistoryPanel } from "@/components/HistoryPanel";
@@ -50,11 +51,16 @@ export default function Home() {
   } = usePromptStore();
 
   const [activeStage, setActiveStage] = useState<string>("idle");
+  const [isHydrated, setIsHydrated] = useState(false);
   const [welcomeState, setWelcomeState] = useState<"loading" | "visible" | "exiting" | "hidden">("loading");
 
   useEffect(() => {
     hydrateHistory();
   }, [hydrateHistory]);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -223,6 +229,10 @@ export default function Home() {
     [setSelectedVariant],
   );
 
+  if (!isHydrated) {
+    return null;
+  }
+
   return (
     <>
       <AnimatePresence>
@@ -275,6 +285,13 @@ export default function Home() {
             </button>
 
             <ModeSelector mode={mode} onChange={onModeChange} />
+
+            <Link
+              href="/admin"
+              className="inline-flex h-10 items-center rounded-full border border-border bg-surface/70 px-4 text-xs font-medium uppercase tracking-[0.08em] text-text-muted transition duration-150 hover:scale-[1.01] hover:text-text active:scale-[0.97]"
+            >
+              Admin
+            </Link>
 
             <button
               type="button"
