@@ -1,4 +1,4 @@
-import type { PromptType } from "@/lib/types";
+import type { InferenceProvider, PromptType } from "@/lib/types";
 
 export type AdminMode = "local" | "hosted" | "unknown";
 export type AdminStyle = "general" | "unknown";
@@ -17,8 +17,13 @@ export type AdminActivity = {
   style: AdminStyle;
   status: AdminActivityStatus;
   latencyMs: number;
-  fallbackUsed: boolean;
   score?: number;
+  qualityScore?: number;
+  qualityGatePassed?: boolean;
+  qualityIssues?: string[];
+  provider?: InferenceProvider;
+  attempts?: number;
+  inferenceMs?: number;
   type?: PromptType;
   errorCode?: string;
 };
@@ -34,7 +39,8 @@ export type AdminMetrics = {
   failedRequests: number;
   rateLimitedRequests: number;
   blockedRequests: number;
-  fallbackCount: number;
+  qualityRejectedCount: number;
+  inferenceUnavailableCount: number;
   requestsLastMinute: number;
 };
 

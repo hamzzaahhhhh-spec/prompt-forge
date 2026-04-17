@@ -8,7 +8,7 @@ import type {
   AdminSnapshot,
   AdminStyle,
 } from "@/lib/admin/types";
-import type { PromptType } from "@/lib/types";
+import type { InferenceProvider, PromptType } from "@/lib/types";
 
 type RecordActivityInput = {
   requestedMode: AdminMode;
@@ -16,8 +16,13 @@ type RecordActivityInput = {
   style: AdminStyle;
   status: AdminActivity["status"];
   latencyMs: number;
-  fallbackUsed?: boolean;
   score?: number;
+  qualityScore?: number;
+  qualityGatePassed?: boolean;
+  qualityIssues?: string[];
+  provider?: InferenceProvider;
+  attempts?: number;
+  inferenceMs?: number;
   type?: PromptType;
   errorCode?: string;
 };
@@ -149,8 +154,13 @@ function createActivityEntry(input: RecordActivityInput): AdminActivity {
     style: input.style,
     status: input.status,
     latencyMs: input.latencyMs,
-    fallbackUsed: Boolean(input.fallbackUsed),
     score: input.score,
+    qualityScore: input.qualityScore,
+    qualityGatePassed: input.qualityGatePassed,
+    qualityIssues: input.qualityIssues,
+    provider: input.provider,
+    attempts: input.attempts,
+    inferenceMs: input.inferenceMs,
     type: input.type,
     errorCode: input.errorCode,
   };
@@ -169,8 +179,7 @@ function isAdminActivity(candidate: unknown): candidate is AdminActivity {
     typeof entry.effectiveMode === "string" &&
     typeof entry.style === "string" &&
     typeof entry.status === "string" &&
-    typeof entry.latencyMs === "number" &&
-    typeof entry.fallbackUsed === "boolean"
+    typeof entry.latencyMs === "number"
   );
 }
 
@@ -407,7 +416,16 @@ function buildMetrics(activities: AdminActivity[]): AdminMetrics {
   const failedRequests = activities.filter((item) => item.status === "failed").length;
   const rateLimitedRequests = activities.filter((item) => item.status === "rate_limited").length;
   const blockedRequests = activities.filter((item) => item.status === "blocked").length;
-  const fallbackCount = activities.filter((item) => item.fallbackUsed).length;
+  const qualityRejectedCount = activities.filter(
+    (item) =>
+      item.errorCode === "QUALITY_GATE_FAILED" ||
+      (item.status === "failed" && item.qualityGatePassed === false),
+  ).length;
+  const inferenceUnavailableCount = activities.filter(
+    (item) =>
+      item.errorCode === "INFERENCE_UNAVAILABLE" ||
+      item.errorCode === "PROVIDER_CONFIG_MISSING",
+  ).length;
   const requestsLastMinute = activities.filter((item) => item.timestamp >= oneMinuteAgo).length;
 
   return {
@@ -416,7 +434,8 @@ function buildMetrics(activities: AdminActivity[]): AdminMetrics {
     failedRequests,
     rateLimitedRequests,
     blockedRequests,
-    fallbackCount,
+    qualityRejectedCount,
+    inferenceUnavailableCount,
     requestsLastMinute,
   };
 }

@@ -150,7 +150,8 @@ export default function AdminPage() {
       { label: "Rate Limited", value: snapshot.metrics.rateLimitedRequests },
       { label: "Blocked", value: snapshot.metrics.blockedRequests },
       { label: "Last Minute", value: snapshot.metrics.requestsLastMinute },
-      { label: "Fallback Used", value: snapshot.metrics.fallbackCount },
+      { label: "Quality Rejected", value: snapshot.metrics.qualityRejectedCount },
+      { label: "Inference Down", value: snapshot.metrics.inferenceUnavailableCount },
     ];
   }, [snapshot]);
 
@@ -242,7 +243,7 @@ export default function AdminPage() {
         </div>
       </motion.div>
 
-      <section className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+      <section className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
         {cards.map((card) => (
           <div key={card.label} className="rounded-xl border border-border bg-surface/90 p-3">
             <p className="text-[11px] uppercase tracking-[0.08em] text-text-muted">{card.label}</p>
@@ -260,17 +261,20 @@ export default function AdminPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] border-collapse text-sm">
+          <table className="w-full min-w-[1040px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-[0.08em] text-text-muted">
                 <th className="py-2 pr-3">Time</th>
                 <th className="py-2 pr-3">Status</th>
                 <th className="py-2 pr-3">Mode</th>
                 <th className="py-2 pr-3">Style</th>
+                <th className="py-2 pr-3">Provider</th>
+                <th className="py-2 pr-3">Attempts</th>
+                <th className="py-2 pr-3">Inference</th>
                 <th className="py-2 pr-3">Type</th>
                 <th className="py-2 pr-3">Score</th>
                 <th className="py-2 pr-3">Latency</th>
-                <th className="py-2 pr-3">Fallback</th>
+                <th className="py-2 pr-3">Quality</th>
                 <th className="py-2">Error</th>
               </tr>
             </thead>
@@ -283,17 +287,30 @@ export default function AdminPage() {
                     {item.requestedMode}{" -> "}{item.effectiveMode}
                   </td>
                   <td className="py-2 pr-3 text-text-muted">{item.style}</td>
+                  <td className="py-2 pr-3 text-text-muted">{item.provider ?? "-"}</td>
+                  <td className="py-2 pr-3 text-text-muted">{item.attempts ?? "-"}</td>
+                  <td className="py-2 pr-3 text-text-muted">
+                    {typeof item.inferenceMs === "number" ? `${item.inferenceMs}ms` : "-"}
+                  </td>
                   <td className="py-2 pr-3 text-text-muted">{item.type ?? "-"}</td>
-                  <td className="py-2 pr-3 text-text-muted">{item.score ?? "-"}</td>
+                  <td className="py-2 pr-3 text-text-muted">
+                    {item.qualityScore ?? item.score ?? "-"}
+                  </td>
                   <td className="py-2 pr-3 text-text-muted">{item.latencyMs}ms</td>
-                  <td className="py-2 pr-3 text-text-muted">{item.fallbackUsed ? "yes" : "no"}</td>
+                  <td className="py-2 pr-3 text-text-muted">
+                    {typeof item.qualityGatePassed === "boolean"
+                      ? item.qualityGatePassed
+                        ? "pass"
+                        : "fail"
+                      : "-"}
+                  </td>
                   <td className="py-2 text-text-muted">{item.errorCode ?? "-"}</td>
                 </tr>
               ))}
 
               {snapshot && snapshot.recentActivities.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-6 text-center text-text-muted">
+                  <td colSpan={12} className="py-6 text-center text-text-muted">
                     No activity found yet. Trigger a transform request, then refresh.
                   </td>
                 </tr>

@@ -65,6 +65,7 @@ export function PromptOutput({
           score: result?.score,
           explanation: result?.explanation,
           type: result?.type,
+          meta: result?.meta,
         },
         null,
         2,
@@ -82,14 +83,21 @@ export function PromptOutput({
 
       <div className="relative z-10 space-y-5">
         {result ? (
-          <div className="flex items-center justify-between gap-3">
-            <VariantTabs
-              value={selectedVariant}
-              promptType={result.type}
-              onChange={onVariantChange}
-            />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <VariantTabs
+                value={selectedVariant}
+                promptType={result.type}
+                onChange={onVariantChange}
+              />
 
-            <ScoreBadge score={result.score} breakdown={result.breakdown} />
+              <ScoreBadge score={result.score} breakdown={result.breakdown} />
+            </div>
+
+            <p className="text-xs text-text-muted">
+              Provider {result.meta.provider} · Attempts {result.meta.attempts} · Inference{" "}
+              {result.meta.inferenceMs}ms
+            </p>
           </div>
         ) : null}
 

@@ -14,20 +14,31 @@ const OPTIONS: Array<{
   label: string;
   value: PromptMode;
   icon: React.ComponentType<{ className?: string }>;
-}> = [
-  { label: "Local", value: "local", icon: Zap },
-  { label: "Hosted", value: "hosted", icon: Cloud },
-];
+}> =
+  process.env.NEXT_PUBLIC_ENABLE_LOCAL_MODE === "true"
+    ? [
+        { label: "Local", value: "local", icon: Zap },
+        { label: "Hosted", value: "hosted", icon: Cloud },
+      ]
+    : [{ label: "Hosted", value: "hosted", icon: Cloud }];
 
 export function ModeSelector({ mode, onChange }: ModeSelectorProps) {
+  const activeIndex = Math.max(
+    0,
+    OPTIONS.findIndex((option) => option.value === mode),
+  );
+
   return (
     <div className="relative inline-flex h-10 items-center rounded-full border border-border bg-surface/90 p-1">
-      <motion.div
-        layoutId="mode-indicator"
-        className="absolute inset-y-1 w-[calc(50%-4px)] rounded-full bg-primary/20"
-        animate={{ x: mode === "local" ? 0 : "100%" }}
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      />
+      {OPTIONS.length > 1 ? (
+        <motion.div
+          layoutId="mode-indicator"
+          className="absolute inset-y-1 rounded-full bg-primary/20"
+          style={{ width: `calc(${100 / OPTIONS.length}% - 4px)` }}
+          animate={{ x: `${activeIndex * 100}%` }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        />
+      ) : null}
 
       {OPTIONS.map((option) => {
         const Icon = option.icon;

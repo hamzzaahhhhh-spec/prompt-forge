@@ -2,7 +2,7 @@
 
 import { motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BriefcaseBusiness, Code2, ImagePlus, Lightbulb, Search, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 import type { PromptStyle } from "@/lib/types";
 
@@ -21,15 +21,10 @@ const STYLE_OPTIONS: Array<{
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { value: "general", label: "General", icon: Sparkles },
-  { value: "code", label: "Code", icon: Code2 },
-  { value: "research", label: "Research", icon: Search },
-  { value: "business", label: "Business", icon: BriefcaseBusiness },
-  { value: "creative", label: "Creative", icon: Lightbulb },
-  { value: "image", label: "Image", icon: ImagePlus },
+  { value: "general", label: "Generate", icon: Sparkles },
 ];
 
-const MIN_LENGTH = 10;
+const MIN_LENGTH = 4;
 const MAX_LENGTH = 8000;
 
 export function PromptInput({

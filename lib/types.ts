@@ -1,12 +1,6 @@
 export type PromptMode = "local" | "hosted";
 
-export type PromptStyle =
-  | "general"
-  | "code"
-  | "research"
-  | "business"
-  | "creative"
-  | "image";
+export type PromptStyle = "general";
 
 export type PromptType =
   | "coding"
@@ -15,9 +9,14 @@ export type PromptType =
   | "creative"
   | "image"
   | "study"
+  | "recommendation"
+  | "comparison"
+  | "explanation"
+  | "tutorial"
+  | "troubleshooting"
   | "general";
 
-export type VariantKey = "short" | "balanced" | "advanced";
+export type VariantKey = "balanced" | "advanced" | "max_pro";
 
 export type ScoreBreakdown = {
   clarity: number;
@@ -28,13 +27,28 @@ export type ScoreBreakdown = {
 
 export type PromptVariants = Record<VariantKey, string>;
 
+export type InferenceProvider = "huggingface" | "ollama";
+
+export type TransformMeta = {
+  provider: InferenceProvider;
+  attempts: number;
+  inferenceMs: number;
+  qualityScore: number;
+  qualityPassed: boolean;
+  qualityIssues: string[];
+  fallbackUsed?: boolean;
+  fallbackReason?: string;
+  requestId?: string;
+};
+
 export type TransformResponse = {
   prompt: string;
-  variants: string[];
+  variants: PromptVariants;
   score: number;
   breakdown: ScoreBreakdown;
   explanation: string;
   type: PromptType;
+  meta: TransformMeta;
 };
 
 export type HistoryItem = {
@@ -50,11 +64,18 @@ export type TransformRequest = {
   style?: PromptStyle;
 };
 
+export type StreamStage =
+  | "sanitize"
+  | "classify"
+  | "intent_spec"
+  | "compose"
+  | "quality_gate"
+  | "done";
+
 export type StreamEvent =
-  | { event: "stage"; stage: string; data?: unknown }
-  | { event: "token"; token: string }
+  | { event: "stage"; stage: StreamStage; data?: unknown }
   | { event: "result"; data: TransformResponse }
-  | { event: "error"; message: string }
+  | { event: "error"; message: string; code?: string }
   | { event: "done" };
 
 export type MissingDetail =
@@ -69,9 +90,8 @@ export type PipelineResult = {
   sanitized: string;
   type: PromptType;
   missing: MissingDetail[];
-  prompt: string;
-  variants: PromptVariants;
-  score: number;
-  breakdown: ScoreBreakdown;
-  explanation: string;
+  entities: string[];
+  qualifiers: string[];
+  coreTopic: string;
+  subDomain: string;
 };

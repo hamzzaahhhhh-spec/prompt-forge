@@ -9,11 +9,20 @@ type LenisProviderProps = {
 
 export function LenisProvider({ children }: LenisProviderProps) {
   useEffect(() => {
+    // Disable Lenis on touch devices entirely — native scroll is smoother and
+    // syncTouch causes double-scroll conflicts and lag on iOS/Android.
+    const isTouchDevice =
+      typeof window !== "undefined" &&
+      ("ontouchstart" in window || navigator.maxTouchPoints > 0);
+
+    if (isTouchDevice) {
+      return;
+    }
+
     const lenis = new Lenis({
-      lerp: 0.9,
+      lerp: 0.1,        // lower lerp = more responsive feel
       smoothWheel: true,
-      syncTouch: true,
-      duration: 1,
+      duration: 1.1,
     });
 
     let frame = 0;

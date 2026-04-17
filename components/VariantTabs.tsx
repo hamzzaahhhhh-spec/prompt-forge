@@ -11,9 +11,9 @@ type VariantTabsProps = {
 };
 
 const TABS: Array<{ key: VariantKey; label: string }> = [
-  { key: "short", label: "Short" },
-  { key: "balanced", label: "Balanced" },
+  { key: "balanced", label: "Simple" },
   { key: "advanced", label: "Advanced" },
+  { key: "max_pro", label: "Max Pro" },
 ];
 
 export function VariantTabs({ value, promptType, onChange }: VariantTabsProps) {

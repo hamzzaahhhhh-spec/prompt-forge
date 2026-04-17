@@ -1,11 +1,13 @@
-import type { PromptType } from "@/lib/types";
+type ChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
 
 type OllamaChatRequest = {
-  input: string;
-  type: PromptType;
-  style: string;
-  systemPrompt: string;
+  messages: ChatMessage[];
   signal?: AbortSignal;
+  maxTokens?: number;
+  temperature?: number;
 };
 
 type OllamaResponse = {
@@ -17,14 +19,17 @@ type OllamaResponse = {
 const cleanBaseUrl = (raw: string) => raw.replace(/\/+$/, "");
 
 export async function callOllamaChat({
-  input,
-  type,
-  style,
-  systemPrompt,
+  messages,
   signal,
+  maxTokens = 3200,
+  temperature = 0.2,
 }: OllamaChatRequest): Promise<string> {
   const base = cleanBaseUrl(process.env.OLLAMA_BASE_URL ?? "http://localhost:11434");
-  const model = process.env.OLLAMA_MODEL ?? "llama3.2";
+  const model = process.env.OLLAMA_MODEL?.trim();
+
+  if (!model) {
+    throw new Error("PROVIDER_CONFIG_MISSING");
+  }
 
   const response = await fetch(`${base}/api/chat`, {
     method: "POST",
@@ -34,23 +39,10 @@ export async function callOllamaChat({
     body: JSON.stringify({
       model,
       stream: false,
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        {
-          role: "user",
-          content: [
-            `Prompt type: ${type}`,
-            `Requested style: ${style}`,
-            "Transform the following source text into a high-quality prompt:",
-            input,
-          ].join("\n\n"),
-        },
-      ],
+      messages,
       options: {
-        temperature: 0.2,
+        temperature,
+        num_predict: maxTokens,
       },
     }),
     signal,

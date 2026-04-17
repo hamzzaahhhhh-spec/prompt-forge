@@ -16,9 +16,17 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Prevent horizontal overflow on mobile */
+  overflow-x: hidden;
+  /* Smooth scroll for anchor links on desktop */
+  scroll-behavior: smooth;
+}
+
 html,
 body {
   margin: 0;
+  /* Use min-h — never 100vh which clips content below mobile browser chrome */
   min-height: 100%;
   font-family: var(--font-inter), sans-serif;
   background: var(--bg);
@@ -27,8 +35,16 @@ body {
 
 body {
   line-height: 1.7;
+  /* Prevent horizontal scroll from wide elements */
+  overflow-x: hidden;
+  /* Ensure native touch scroll is never blocked */
+  -webkit-overflow-scrolling: touch;
 }
 
+/* ─── Background Mesh ────────────────────────────────────────────────────────
+   On mobile we replace the expensive animation (transform + filter hue-rotate)
+   with a simple opacity pulse — drastically reduces GPU load.
+   ─────────────────────────────────────────────────────────────────────────── */
 .mesh-bg {
   background:
     radial-gradient(circle at 15% 20%, rgba(124, 110, 248, 0.18), transparent 35%),
@@ -36,51 +52,74 @@ body {
     radial-gradient(circle at 80% 85%, rgba(124, 110, 248, 0.14), transparent 34%),
     radial-gradient(circle at 20% 85%, rgba(62, 207, 207, 0.08), transparent 28%),
     #0a0a0f;
-  animation: meshShift 20s ease-in-out infinite;
+  /* Only animate on desktop — uses opacity instead of transform+filter */
+  animation: meshPulse 20s ease-in-out infinite;
+  /* Promote to own layer so it doesn't cause repaints */
+  will-change: opacity;
+  contain: strict;
 }
 
+@keyframes meshPulse {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+
+/* On mobile: kill the animation entirely, static background only */
+@media (max-width: 768px) {
+  .mesh-bg {
+    animation: none;
+    will-change: auto;
+  }
+}
+
+/* Respect user preference for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .mesh-bg,
+  .welcome-halo {
+    animation: none !important;
+    will-change: auto !important;
+  }
+}
+
+/* ─── Welcome Screen Overlays ─────────────────────────────────────────────── */
 .welcome-noise {
   background-image: radial-gradient(rgba(255, 255, 255, 0.1) 0.55px, transparent 0.55px);
   background-size: 2px 2px;
   mix-blend-mode: soft-light;
+  /* Pointer events off — never blocks touch */
+  pointer-events: none;
 }
 
 .welcome-halo {
   background: radial-gradient(circle, rgba(124, 110, 248, 0.18) 0%, rgba(124, 110, 248, 0.08) 32%, transparent 68%);
   filter: blur(18px);
+  pointer-events: none;
   animation: welcomeHaloPulse 8s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
-@keyframes meshShift {
-  0% {
-    transform: translate3d(0%, 0%, 0) scale(1);
-    filter: hue-rotate(0deg);
-  }
-  50% {
-    transform: translate3d(-1%, 1%, 0) scale(1.02);
-    filter: hue-rotate(8deg);
-  }
-  100% {
-    transform: translate3d(0%, 0%, 0) scale(1);
-    filter: hue-rotate(0deg);
+@media (max-width: 768px) {
+  .welcome-halo {
+    /* Simpler animation on mobile — no blur change, just opacity */
+    filter: blur(12px);
+    animation: welcomeHaloPulseMobile 8s ease-in-out infinite;
+    will-change: opacity;
   }
 }
 
 @keyframes welcomeHaloPulse {
-  0% {
-    transform: translate(-50%, -50%) scale(0.96);
-    opacity: 0.6;
-  }
-  50% {
-    transform: translate(-50%, -50%) scale(1.03);
-    opacity: 0.9;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(0.96);
-    opacity: 0.6;
-  }
+  0% { transform: translate(-50%, -50%) scale(0.96); opacity: 0.6; }
+  50% { transform: translate(-50%, -50%) scale(1.03); opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) scale(0.96); opacity: 0.6; }
 }
 
+@keyframes welcomeHaloPulseMobile {
+  0% { transform: translate(-50%, -50%); opacity: 0.5; }
+  50% { transform: translate(-50%, -50%); opacity: 0.85; }
+  100% { transform: translate(-50%, -50%); opacity: 0.5; }
+}
+
+/* ─── Scrollbar Utilities ─────────────────────────────────────────────────── */
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -88,4 +127,23 @@ body {
 
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/* ─── Touch / Tap Target Safety ───────────────────────────────────────────── */
+/* Ensure all interactive elements have min 44px touch targets on mobile */
+@media (max-width: 768px) {
+  button, a, [role="button"] {
+    min-height: 44px;
+  }
+}
+
+/* ─── Loading shimmer animation ────────────────────────────────────────────── */
+@keyframes loading-shimmer {
+  0% { background-position: -100% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-loading-shimmer {
+  background-size: 200% 100%;
+  animation: loading-shimmer 1.4s ease-in-out infinite;
 }

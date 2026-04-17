@@ -93,13 +93,7 @@ export default function Home() {
       return "";
     }
 
-    const indexByVariant: Record<VariantKey, number> = {
-      short: 0,
-      balanced: 1,
-      advanced: 2,
-    };
-
-    const variant = result.variants[indexByVariant[selectedVariant]] ?? result.prompt;
+    const variant = result.variants[selectedVariant] ?? result.prompt;
     if (!variant) {
       return result.prompt;
     }
@@ -108,7 +102,7 @@ export default function Home() {
   }, [result, selectedVariant]);
 
   const onTransform = useCallback(async () => {
-    if (isStreaming || inputText.trim().length < 10) {
+    if (isStreaming || inputText.trim().length < 4) {
       return;
     }
 
@@ -162,11 +156,6 @@ export default function Home() {
 
           if (event.event === "stage") {
             setActiveStage(event.stage);
-            continue;
-          }
-
-          if (event.event === "token") {
-            setStreamPrompt((prev) => prev + event.token);
             continue;
           }
 
@@ -246,9 +235,10 @@ export default function Home() {
 
       <motion.div
         animate={{
-          opacity: welcomeVisible ? 0.32 : 1,
-          scale: welcomeVisible ? 0.988 : 1,
-          filter: welcomeVisible ? "blur(2px)" : "blur(0px)",
+          opacity: welcomeVisible ? 0.28 : 1,
+          scale: welcomeVisible ? 0.986 : 1,
+          // No filter:blur — it forces GPU compositing of the entire subtree,
+          // which is catastrophic on mobile (causes 100+ ms frame drops).
         }}
         transition={{ duration: 0.5, ease: "easeOut" }}
         className={`relative pb-16 ${welcomeVisible ? "pointer-events-none select-none" : ""}`}
@@ -257,9 +247,10 @@ export default function Home() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: "easeOut" }}
-        className="fixed inset-x-0 top-0 z-40 border-b border-border/80 bg-surface/55 backdrop-blur-xl"
+        className="fixed inset-x-0 top-0 z-40 border-b border-border/80 bg-surface/75 backdrop-blur-md"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
       >
-        <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between px-3 sm:h-16 sm:px-6 lg:h-20 lg:px-8">
           <button
             type="button"
             className="group inline-flex items-center gap-2 rounded-full border border-border bg-surface/80 px-4 py-2 text-sm text-text-muted transition duration-150 hover:scale-[1.01] hover:text-text active:scale-[0.97]"
@@ -305,9 +296,12 @@ export default function Home() {
         </div>
       </motion.header>
 
-      <main className="mx-auto w-full max-w-7xl px-4 pt-28 sm:px-6 lg:px-8">
+      <main
+        className="mx-auto w-full max-w-7xl px-3 pt-20 sm:px-6 sm:pt-24 lg:px-8 lg:pt-28"
+        style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom))" }}
+      >
         <div className="mb-8 max-w-3xl">
-          <h1 className="text-balance text-[clamp(32px,5vw,56px)] font-bold leading-[1.02] text-text">
+          <h1 className="text-balance text-[clamp(28px,5vw,56px)] font-bold leading-[1.08] text-text">
             Paste any text. Forge a masterful AI prompt.
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-relaxed text-text-muted">
@@ -316,11 +310,11 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-10">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-10">
           <motion.section
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, delay: PAGE_STAGGER, ease: "easeOut" }}
+            transition={{ duration: 0.38, delay: PAGE_STAGGER, ease: "easeOut" }}
             className="lg:col-span-4"
           >
             <PromptInput
@@ -335,9 +329,9 @@ export default function Home() {
           </motion.section>
 
           <motion.section
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, delay: PAGE_STAGGER + 0.12, ease: "easeOut" }}
+            transition={{ duration: 0.38, delay: PAGE_STAGGER + 0.08, ease: "easeOut" }}
             className="lg:col-span-6"
           >
             <PromptOutput
