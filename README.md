@@ -32,8 +32,8 @@ PromptForge is a sophisticated Next.js application designed for prompt engineeri
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/hamzzaahhhhh-spec/promptforge.git
-   cd promptforge
+   git clone https://github.com/hamzzaahhhhh-spec/prompt-forge.git
+   cd prompt-forge
    ```
 
 2. Install dependencies:
