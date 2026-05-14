@@ -2,69 +2,215 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   DESIGN SYSTEM — PromptForge Awwwards Edition
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 :root {
-  --bg: #0a0a0f;
-  --surface: #111118;
-  --border: rgba(255, 255, 255, 0.06);
-  --primary: #7c6ef8;
-  --accent: #3ecfcf;
-  --text: #f0eff8;
-  --text-muted: #7a798a;
+  /* ── Core palette ──────────────────────────────────────────────────────── */
+  --bg: #0A0A0A;
+  --surface: #141414;
+  --surface-elevated: #1A1A1A;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+
+  /* ── Accent — electric violet (used sparingly, max 10% of screen) ───── */
+  --accent: #7C3AED;
+  --accent-glow: rgba(124, 58, 237, 0.35);
+  --accent-soft: rgba(124, 58, 237, 0.12);
+  --accent-hover: #8B5CF6;
+
+  /* ── Typography ────────────────────────────────────────────────────────── */
+  --text: #F5F2EC;
+  --text-secondary: #6B6B6B;
+  --text-muted: #4A4A4A;
+
+  /* ── Feedback ──────────────────────────────────────────────────────────── */
+  --score-high: #22D3A5;
+  --score-mid: #F59E0B;
+  --score-low: #EF4444;
+
+  /* ── Spacing ───────────────────────────────────────────────────────────── */
+  --section-pad: 140px;
+  --card-radius: 20px;
+  --btn-radius: 14px;
+
+  /* ── Animation ─────────────────────────────────────────────────────────── */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-custom: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-in-out-custom: cubic-bezier(0.4, 0, 0.6, 1);
+  --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Cursor ────────────────────────────────────────────────────────────── */
+  --cursor-size: 24px;
+  --cursor-size-hover: 80px;
 }
+
+/* ── Light theme tokens (infrastructure — toggle-ready) ──────────────── */
+[data-theme="light"] {
+  --bg: #FAFAF9;
+  --surface: #FFFFFF;
+  --surface-elevated: #F5F5F4;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-subtle: rgba(0, 0, 0, 0.04);
+  --text: #1A1A1A;
+  --text-secondary: #737373;
+  --text-muted: #A3A3A3;
+  --accent: #7C3AED;
+  --accent-glow: rgba(124, 58, 237, 0.2);
+  --accent-soft: rgba(124, 58, 237, 0.08);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESET & BASE
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 * {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html {
-  /* Prevent horizontal overflow on mobile */
   overflow-x: hidden;
-  /* Smooth scroll for anchor links on desktop */
-  scroll-behavior: smooth;
+  /* Lenis handles smooth scroll — disable native */
+  scroll-behavior: auto;
 }
 
-html,
-body {
-  margin: 0;
-  /* Use min-h — never 100vh which clips content below mobile browser chrome */
+html, body {
   min-height: 100%;
-  font-family: var(--font-inter), sans-serif;
+  font-family: var(--font-inter), 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background: var(--bg);
   color: var(--text);
 }
 
 body {
-  line-height: 1.7;
-  /* Prevent horizontal scroll from wide elements */
+  line-height: 1.75;
   overflow-x: hidden;
-  /* Ensure native touch scroll is never blocked */
   -webkit-overflow-scrolling: touch;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Hide default cursor when custom cursor is active */
+  cursor: none;
 }
 
-/* ─── Background Mesh ────────────────────────────────────────────────────────
-   On mobile we replace the expensive animation (transform + filter hue-rotate)
-   with a simple opacity pulse — drastically reduces GPU load.
-   ─────────────────────────────────────────────────────────────────────────── */
+/* Restore cursor on touch devices */
+@media (hover: none) and (pointer: coarse) {
+  body { cursor: auto; }
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--text);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   NOISE TEXTURE OVERLAY — Subtle grain across entire page
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.noise-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SCROLL PROGRESS BAR
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  z-index: 10000;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, var(--accent), var(--accent-hover), var(--accent));
+  will-change: transform;
+  transition: none; /* GSAP handles this */
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CUSTOM CURSOR
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.custom-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--cursor-size);
+  height: var(--cursor-size);
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  pointer-events: none;
+  z-index: 99999;
+  mix-blend-mode: difference;
+  transform: translate(-50%, -50%);
+  transition: width 0.4s var(--ease-out-expo),
+              height 0.4s var(--ease-out-expo),
+              border-color 0.3s ease,
+              background-color 0.3s ease,
+              opacity 0.3s ease;
+  will-change: transform;
+  opacity: 0;
+}
+
+.custom-cursor.visible {
+  opacity: 1;
+}
+
+.custom-cursor.hovering {
+  width: var(--cursor-size-hover);
+  height: var(--cursor-size-hover);
+  background: var(--accent);
+  border-color: var(--accent);
+  mix-blend-mode: difference;
+}
+
+.custom-cursor.text-mode {
+  width: 4px;
+  height: 32px;
+  border-radius: 2px;
+  background: var(--accent);
+  border: none;
+}
+
+/* Hide custom cursor on touch devices */
+@media (hover: none) and (pointer: coarse) {
+  .custom-cursor { display: none !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BACKGROUND MESH — Cinematic gradient with Ken Burns
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 .mesh-bg {
   background:
-    radial-gradient(circle at 15% 20%, rgba(124, 110, 248, 0.18), transparent 35%),
-    radial-gradient(circle at 85% 15%, rgba(62, 207, 207, 0.12), transparent 30%),
-    radial-gradient(circle at 80% 85%, rgba(124, 110, 248, 0.14), transparent 34%),
-    radial-gradient(circle at 20% 85%, rgba(62, 207, 207, 0.08), transparent 28%),
-    #0a0a0f;
-  /* Only animate on desktop — uses opacity instead of transform+filter */
-  animation: meshPulse 20s ease-in-out infinite;
-  /* Promote to own layer so it doesn't cause repaints */
-  will-change: opacity;
+    radial-gradient(ellipse at 15% 20%, rgba(124, 58, 237, 0.12), transparent 45%),
+    radial-gradient(ellipse at 85% 15%, rgba(124, 58, 237, 0.06), transparent 40%),
+    radial-gradient(ellipse at 80% 85%, rgba(124, 58, 237, 0.08), transparent 40%),
+    radial-gradient(ellipse at 20% 85%, rgba(124, 58, 237, 0.04), transparent 35%),
+    var(--bg);
+  animation: kenBurns 30s ease-in-out infinite;
+  will-change: transform;
   contain: strict;
 }
 
-@keyframes meshPulse {
-  0%, 100% { opacity: 0.85; }
-  50% { opacity: 1; }
+@keyframes kenBurns {
+  0%   { transform: scale(1)    translate3d(0, 0, 0); }
+  33%  { transform: scale(1.04) translate3d(-0.5%, 0.5%, 0); }
+  66%  { transform: scale(1.02) translate3d(0.5%, -0.3%, 0); }
+  100% { transform: scale(1)    translate3d(0, 0, 0); }
 }
 
-/* On mobile: kill the animation entirely, static background only */
 @media (max-width: 768px) {
   .mesh-bg {
     animation: none;
@@ -72,54 +218,357 @@ body {
   }
 }
 
-/* Respect user preference for reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .mesh-bg,
-  .welcome-halo {
-    animation: none !important;
-    will-change: auto !important;
-  }
+/* ═══════════════════════════════════════════════════════════════════════════
+   FROSTED GLASS NAVIGATION — Morphs in on scroll
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.nav-glass {
+  background: rgba(10, 10, 10, 0.6);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border-bottom: 1px solid var(--border);
+  transition: background 0.5s var(--ease-out-expo),
+              backdrop-filter 0.3s ease,
+              transform 0.6s var(--ease-out-expo),
+              opacity 0.4s ease;
 }
 
-/* ─── Welcome Screen Overlays ─────────────────────────────────────────────── */
-.welcome-noise {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.1) 0.55px, transparent 0.55px);
-  background-size: 2px 2px;
-  mix-blend-mode: soft-light;
-  /* Pointer events off — never blocks touch */
+.nav-glass.scrolled {
+  background: rgba(10, 10, 10, 0.85);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.nav-glass.hidden-up {
+  transform: translateY(-100%);
+  opacity: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIQUID FILL BUTTONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.btn-liquid {
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+  transition: transform 0.2s var(--spring-bounce),
+              box-shadow 0.3s ease;
+}
+
+.btn-liquid::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--accent-hover);
+  transform: translateY(100%);
+  transition: transform 0.45s var(--ease-out-expo);
+  border-radius: inherit;
+}
+
+.btn-liquid:hover::before {
+  transform: translateY(0);
+}
+
+.btn-liquid:active {
+  transform: scale(0.96);
+}
+
+/* Primary variant */
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  border: none;
+  box-shadow: 0 0 0 0 var(--accent-glow);
+}
+
+.btn-primary:hover {
+  box-shadow: 0 8px 32px var(--accent-glow),
+              0 0 0 1px var(--accent);
+}
+
+/* Ghost variant */
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.btn-ghost:hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   3D TILT CARDS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.card-3d {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  transition: transform 0.4s var(--ease-out-expo),
+              box-shadow 0.4s var(--ease-out-expo),
+              border-color 0.3s ease;
+  transform-style: preserve-3d;
+  perspective: 1000px;
+  will-change: transform;
+}
+
+.card-3d:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5),
+              0 0 0 1px rgba(124, 58, 237, 0.1);
+}
+
+/* Inner content parallax on hover */
+.card-3d .card-inner {
+  transition: transform 0.4s var(--ease-out-expo);
+}
+
+/* Gradient shine effect */
+.card-3d .card-shine {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.4s ease;
   pointer-events: none;
+  background: radial-gradient(
+    600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(124, 58, 237, 0.08),
+    transparent 40%
+  );
 }
 
-.welcome-halo {
-  background: radial-gradient(circle, rgba(124, 110, 248, 0.18) 0%, rgba(124, 110, 248, 0.08) 32%, transparent 68%);
-  filter: blur(18px);
+.card-3d:hover .card-shine {
+  opacity: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FLOATING LABEL INPUTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.input-float-wrapper {
+  position: relative;
+}
+
+.input-float {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.7;
+  outline: none;
+  resize: none;
+  transition: border-color 0.3s ease,
+              box-shadow 0.4s var(--ease-out-expo);
+}
+
+.input-float:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow),
+              0 0 40px rgba(124, 58, 237, 0.08);
+}
+
+.input-float-label {
+  position: absolute;
+  top: 22px;
+  left: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
   pointer-events: none;
-  animation: welcomeHaloPulse 8s ease-in-out infinite;
-  will-change: transform, opacity;
+  transition: all 0.3s var(--ease-out-expo);
+  transform-origin: left top;
 }
 
-@media (max-width: 768px) {
-  .welcome-halo {
-    /* Simpler animation on mobile — no blur change, just opacity */
-    filter: blur(12px);
-    animation: welcomeHaloPulseMobile 8s ease-in-out infinite;
-    will-change: opacity;
-  }
+.input-float:focus ~ .input-float-label,
+.input-float:not(:placeholder-shown) ~ .input-float-label {
+  transform: translateY(-32px) scale(0.8);
+  color: var(--accent);
 }
 
-@keyframes welcomeHaloPulse {
-  0% { transform: translate(-50%, -50%) scale(0.96); opacity: 0.6; }
-  50% { transform: translate(-50%, -50%) scale(1.03); opacity: 0.9; }
-  100% { transform: translate(-50%, -50%) scale(0.96); opacity: 0.6; }
+/* ═══════════════════════════════════════════════════════════════════════════
+   SCROLL-TRIGGERED REVEAL ANIMATIONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.8s var(--ease-out-custom),
+              transform 0.8s var(--ease-out-custom);
 }
 
-@keyframes welcomeHaloPulseMobile {
-  0% { transform: translate(-50%, -50%); opacity: 0.5; }
-  50% { transform: translate(-50%, -50%); opacity: 0.85; }
-  100% { transform: translate(-50%, -50%); opacity: 0.5; }
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
-/* ─── Scrollbar Utilities ─────────────────────────────────────────────────── */
+/* Stagger children */
+.reveal-stagger > * {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.6s var(--ease-out-custom),
+              transform 0.6s var(--ease-out-custom);
+}
+
+.reveal-stagger.visible > *:nth-child(1) { transition-delay: 0s; }
+.reveal-stagger.visible > *:nth-child(2) { transition-delay: 0.08s; }
+.reveal-stagger.visible > *:nth-child(3) { transition-delay: 0.16s; }
+.reveal-stagger.visible > *:nth-child(4) { transition-delay: 0.24s; }
+.reveal-stagger.visible > *:nth-child(5) { transition-delay: 0.32s; }
+.reveal-stagger.visible > *:nth-child(6) { transition-delay: 0.40s; }
+.reveal-stagger.visible > *:nth-child(7) { transition-delay: 0.48s; }
+.reveal-stagger.visible > *:nth-child(8) { transition-delay: 0.56s; }
+
+.reveal-stagger.visible > * {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Word-by-word hero animation */
+.word-reveal {
+  display: inline-block;
+  overflow: hidden;
+}
+
+.word-reveal .word {
+  display: inline-block;
+  transform: translateY(100%);
+  opacity: 0;
+  transition: transform 0.7s var(--ease-out-custom),
+              opacity 0.7s var(--ease-out-custom);
+}
+
+.word-reveal.visible .word {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LOADING SCREEN
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.loading-screen .logo-letter {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(40px) rotateX(-90deg);
+  font-size: clamp(36px, 6vw, 64px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.loading-screen .counter {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.loading-screen .progress-line {
+  width: 120px;
+  height: 1px;
+  background: var(--border);
+  margin-top: 24px;
+  overflow: hidden;
+  border-radius: 1px;
+}
+
+.loading-screen .progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.loading-curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: var(--bg);
+  transform-origin: top center;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SKELETON SHIMMER — 45deg gradient sweep
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    105deg,
+    var(--surface) 0%,
+    var(--surface-elevated) 40%,
+    rgba(124, 58, 237, 0.06) 50%,
+    var(--surface-elevated) 60%,
+    var(--surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+.animate-loading-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MAGNETIC HOVER EFFECT (applied via JS, CSS transition helpers)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.magnetic {
+  transition: transform 0.3s var(--ease-out-expo);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SCROLLBAR — Minimal & elegant
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -129,21 +578,111 @@ body {
   display: none;
 }
 
-/* ─── Touch / Tap Target Safety ───────────────────────────────────────────── */
-/* Ensure all interactive elements have min 44px touch targets on mobile */
+/* ═══════════════════════════════════════════════════════════════════════════
+   TOUCH TARGET SAFETY
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 @media (max-width: 768px) {
   button, a, [role="button"] {
     min-height: 44px;
   }
 }
 
-/* ─── Loading shimmer animation ────────────────────────────────────────────── */
-@keyframes loading-shimmer {
-  0% { background-position: -100% 0; }
-  100% { background-position: 200% 0; }
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAG / BADGE STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 100px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
 }
 
-.animate-loading-shimmer {
-  background-size: 200% 100%;
-  animation: loading-shimmer 1.4s ease-in-out infinite;
+.tag-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   UTILITY CLASSES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--text), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glow-accent {
+  box-shadow: 0 0 40px var(--accent-glow),
+              0 0 80px rgba(124, 58, 237, 0.1);
+}
+
+.border-glow {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   WELCOME SCREEN LEGACY (kept for compat, but redirected to LoadingScreen)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.welcome-noise {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.1) 0.55px, transparent 0.55px);
+  background-size: 2px 2px;
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   REDUCED MOTION — Replace all animations with simple fades
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.2s !important;
+  }
+
+  .mesh-bg {
+    animation: none !important;
+    will-change: auto !important;
+  }
+
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .reveal-stagger > * {
+    opacity: 1 !important;
+    transform: none !important;
+    transition-delay: 0s !important;
+  }
+
+  .word-reveal .word {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .custom-cursor {
+    display: none !important;
+  }
+
+  .noise-overlay {
+    display: none !important;
+  }
 }

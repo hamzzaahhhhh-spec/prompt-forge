@@ -10,20 +10,20 @@ type ScoreBadgeProps = {
   breakdown: ScoreBreakdown;
 };
 
-const CIRCUMFERENCE = 2 * Math.PI * 20;
+const CIRCUMFERENCE = 2 * Math.PI * 22;
 
 const clamp = (value: number) => Math.max(0, Math.min(100, value));
 
 const colorFor = (score: number) => {
-  if (score >= 80) {
-    return "#22D3A5";
-  }
+  if (score >= 80) return "var(--score-high)";
+  if (score >= 55) return "var(--score-mid)";
+  return "var(--score-low)";
+};
 
-  if (score >= 55) {
-    return "#F59E0B";
-  }
-
-  return "#EF4444";
+const glowFor = (score: number) => {
+  if (score >= 80) return "0 0 20px rgba(34, 211, 165, 0.3)";
+  if (score >= 55) return "0 0 20px rgba(245, 158, 11, 0.3)";
+  return "0 0 20px rgba(239, 68, 68, 0.3)";
 };
 
 export function ScoreBadge({ score, breakdown }: ScoreBadgeProps) {
@@ -38,9 +38,9 @@ export function ScoreBadge({ score, breakdown }: ScoreBadgeProps) {
   useEffect(() => {
     const controls = animate(progress, normalized, {
       type: "spring",
-      stiffness: 60,
-      damping: 12,
-      duration: 1.2,
+      stiffness: 50,
+      damping: 14,
+      duration: 1.4,
     });
 
     return () => controls.stop();
@@ -48,32 +48,45 @@ export function ScoreBadge({ score, breakdown }: ScoreBadgeProps) {
 
   return (
     <div className="group relative inline-flex items-center justify-center">
-      <svg width="56" height="56" viewBox="0 0 56 56" className="-rotate-90">
+      <svg
+        width="64"
+        height="64"
+        viewBox="0 0 64 64"
+        className="-rotate-90"
+        style={{ filter: glowFor(normalized) }}
+      >
         <circle
-          cx="28"
-          cy="28"
-          r="20"
-          stroke="rgba(255,255,255,0.12)"
-          strokeWidth="4"
+          cx="32"
+          cy="32"
+          r="22"
+          stroke="rgba(255,255,255,0.06)"
+          strokeWidth="3"
           fill="transparent"
         />
         <motion.circle
-          cx="28"
-          cy="28"
-          r="20"
+          cx="32"
+          cy="32"
+          r="22"
           stroke={colorFor(normalized)}
-          strokeWidth="4"
+          strokeWidth="3"
           strokeLinecap="round"
           fill="transparent"
-          style={{ strokeDasharray: CIRCUMFERENCE, strokeDashoffset: strokeOffset }}
+          style={{
+            strokeDasharray: CIRCUMFERENCE,
+            strokeDashoffset: strokeOffset,
+          }}
         />
       </svg>
 
-      <motion.span className="absolute text-sm font-semibold text-text">
+      <motion.span
+        className="absolute text-sm font-bold tabular-nums text-text"
+        style={{ letterSpacing: "-0.02em" }}
+      >
         {animatedScore}
       </motion.span>
 
-      <div className="pointer-events-none absolute -bottom-10 left-1/2 z-10 w-max -translate-x-1/2 rounded-md border border-border bg-surface px-2 py-1 text-[11px] text-text-muted opacity-0 shadow-soft transition duration-150 group-hover:opacity-100">
+      {/* Tooltip */}
+      <div className="pointer-events-none absolute -bottom-12 left-1/2 z-20 w-max -translate-x-1/2 rounded-xl border border-border bg-surface px-3 py-2 text-[11px] tabular-nums text-text-secondary opacity-0 shadow-card transition duration-200 group-hover:opacity-100">
         Clarity {breakdown.clarity}/25 · Specificity {breakdown.specificity}/25 · Constraints {breakdown.constraints}/25 · Structure {breakdown.structure}/25
       </div>
     </div>

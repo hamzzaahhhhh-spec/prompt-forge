@@ -29,14 +29,20 @@ export function ModeSelector({ mode, onChange }: ModeSelectorProps) {
   );
 
   return (
-    <div className="relative inline-flex h-10 items-center rounded-full border border-border bg-surface/90 p-1">
+    <div className="relative inline-flex h-10 items-center rounded-xl border border-border bg-surface/90 p-1">
+      {/* Sliding indicator (liquid blob) */}
       {OPTIONS.length > 1 ? (
         <motion.div
           layoutId="mode-indicator"
-          className="absolute inset-y-1 rounded-full bg-primary/20"
-          style={{ width: `calc(${100 / OPTIONS.length}% - 4px)` }}
+          className="absolute inset-y-1 rounded-lg"
+          style={{
+            width: `calc(${100 / OPTIONS.length}% - 4px)`,
+            background: "var(--accent)",
+            opacity: 0.15,
+            boxShadow: "0 0 20px var(--accent-glow)",
+          }}
           animate={{ x: `${activeIndex * 100}%` }}
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          transition={{ type: "spring", stiffness: 350, damping: 32 }}
         />
       ) : null}
 
@@ -49,11 +55,11 @@ export function ModeSelector({ mode, onChange }: ModeSelectorProps) {
             key={option.value}
             type="button"
             onClick={() => onChange(option.value)}
-            className={`relative z-10 inline-flex h-8 w-24 items-center justify-center gap-2 rounded-full text-xs font-medium uppercase tracking-[0.08em] transition duration-150 hover:scale-[1.01] active:scale-[0.97] sm:w-28 ${
-              active ? "text-text" : "text-text-muted"
+            className={`magnetic relative z-10 inline-flex h-8 w-24 items-center justify-center gap-2 rounded-lg text-xs font-medium uppercase tracking-widest transition duration-200 sm:w-28 ${
+              active ? "text-text" : "text-text-secondary hover:text-text"
             }`}
           >
-            <Icon className={`h-3.5 w-3.5 ${active ? "text-primary" : "text-text-muted"}`} />
+            <Icon className={`h-3.5 w-3.5 transition-colors duration-200 ${active ? "text-accent" : ""}`} />
             <span className="hidden sm:inline">{option.label}</span>
           </button>
         );

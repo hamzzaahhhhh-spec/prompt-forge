@@ -26,22 +26,25 @@ export function HistoryPanel() {
     <AnimatePresence>
       {historyOpen ? (
         <>
+          {/* Backdrop */}
           <motion.button
             type="button"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
             onClick={() => setHistoryOpen(false)}
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-md"
             aria-label="Close history"
           />
 
+          {/* Desktop panel */}
           <motion.aside
-            initial={{ x: -320 }}
+            initial={{ x: -340 }}
             animate={{ x: 0 }}
-            exit={{ x: -320 }}
-            transition={{ type: "spring", stiffness: 380, damping: 34 }}
-            className="fixed left-0 top-0 z-50 hidden h-full w-80 flex-col border-r border-border bg-surface/95 p-4 shadow-soft lg:flex"
+            exit={{ x: -340 }}
+            transition={{ type: "spring", stiffness: 400, damping: 36 }}
+            className="fixed left-0 top-0 z-50 hidden h-full w-80 flex-col border-r border-border bg-surface/95 backdrop-blur-xl p-5 shadow-card lg:flex"
           >
             <HistoryContent
               history={history}
@@ -54,13 +57,18 @@ export function HistoryPanel() {
             />
           </motion.aside>
 
+          {/* Mobile panel */}
           <motion.aside
-            initial={{ y: 420 }}
+            initial={{ y: 500 }}
             animate={{ y: 0 }}
-            exit={{ y: 420 }}
-            transition={{ type: "spring", stiffness: 360, damping: 32 }}
-            className="fixed inset-x-0 bottom-0 z-50 h-[75vh] rounded-t-2xl border border-border bg-surface/95 p-4 shadow-soft lg:hidden"
+            exit={{ y: 500 }}
+            transition={{ type: "spring", stiffness: 380, damping: 34 }}
+            className="fixed inset-x-0 bottom-0 z-50 h-[75vh] rounded-t-3xl border border-border bg-surface/95 backdrop-blur-xl p-5 shadow-card lg:hidden"
           >
+            {/* Drag handle */}
+            <div className="mb-4 flex justify-center">
+              <div className="h-1 w-8 rounded-full bg-border" />
+            </div>
             <HistoryContent
               history={history}
               onClose={() => setHistoryOpen(false)}
@@ -87,17 +95,20 @@ type HistoryContentProps = {
 function HistoryContent({ history, onClose, onClear, onRestore }: HistoryContentProps) {
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="inline-flex items-center gap-2 text-sm font-semibold text-text">
-          <Clock3 className="h-4 w-4 text-primary" />
+      {/* Header */}
+      <div className="mb-5 flex items-center justify-between">
+        <div className="inline-flex items-center gap-2.5 text-sm font-semibold text-text">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/10">
+            <Clock3 className="h-3.5 w-3.5 text-accent" />
+          </div>
           Prompt History
         </div>
 
-        <div className="inline-flex items-center gap-2">
+        <div className="inline-flex items-center gap-1.5">
           <button
             type="button"
             onClick={onClear}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface text-text-muted transition duration-150 hover:scale-[1.01] hover:text-text active:scale-[0.97]"
+            className="btn-ghost magnetic inline-flex h-8 w-8 items-center justify-center rounded-lg transition duration-200"
             aria-label="Clear history"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -105,7 +116,7 @@ function HistoryContent({ history, onClose, onClear, onRestore }: HistoryContent
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface text-text-muted transition duration-150 hover:scale-[1.01] hover:text-text active:scale-[0.97]"
+            className="btn-ghost magnetic inline-flex h-8 w-8 items-center justify-center rounded-lg transition duration-200"
             aria-label="Close history"
           >
             <X className="h-3.5 w-3.5" />
@@ -113,32 +124,44 @@ function HistoryContent({ history, onClose, onClear, onRestore }: HistoryContent
         </div>
       </div>
 
+      {/* History items with staggered animation */}
       <div className="no-scrollbar flex-1 space-y-2 overflow-y-auto pr-1">
         {history.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border p-4 text-sm text-text-muted">
+          <div className="rounded-xl border border-dashed border-border/60 p-5 text-center text-sm text-text-secondary">
             No saved prompts yet.
           </div>
         ) : (
-          history.map((item) => (
-            <button
+          history.map((item, index) => (
+            <motion.button
               key={item.id}
               type="button"
               onClick={() => onRestore(item.id)}
-              className="w-full rounded-xl border border-border bg-white/[0.02] p-3 text-left transition duration-150 hover:scale-[1.01] hover:border-primary/50 active:scale-[0.97]"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                delay: index * 0.06,
+                duration: 0.4,
+                ease: [0.25, 0.46, 0.45, 0.94],
+              }}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+              className="group w-full rounded-xl border border-border bg-surface/50 p-3.5 text-left transition duration-300 hover:border-accent/30 hover:bg-accent/5"
             >
               <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="text-xs text-text-muted">{formatDate(item.timestamp)}</span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.08em] text-text-muted">
-                  <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-                  {item.result.type}
+                <span className="text-xs tabular-nums text-text-secondary">
+                  {formatDate(item.timestamp)}
                 </span>
+                <div className="tag">
+                  <span className="tag-dot" />
+                  {item.result.type}
+                </div>
               </div>
-              <p className="line-clamp-2 text-sm text-text">{item.input.slice(0, 60)}</p>
-              <div className="mt-2 inline-flex items-center gap-1 text-xs text-primary">
-                <RotateCcw className="h-3.5 w-3.5" />
+              <p className="line-clamp-2 text-sm text-text">{item.input.slice(0, 80)}</p>
+              <div className="mt-2.5 inline-flex items-center gap-1.5 text-xs text-accent opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                <RotateCcw className="h-3 w-3" />
                 Restore
               </div>
-            </button>
+            </motion.button>
           ))
         )}
       </div>

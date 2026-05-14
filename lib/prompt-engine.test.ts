@@ -8,6 +8,14 @@ import {
   runPipeline,
 } from "@/lib/prompt-engine";
 
+function firstSentence(text: string): string {
+  const match = text.match(/^.*?[.!?](?:\s|$)/);
+  return (match?.[0] ?? text).trim();
+}
+
+const CONSULTANT_BOILERPLATE_PATTERN =
+  /seasoned senior consultant|deep domain knowledge|ruthless practicality|professional who values direct and practical results/i;
+
 describe("runPipeline + complexity", () => {
   it("detects study intent from vague learning input", () => {
     const pipeline = runPipeline("how can I learn math quickly");
@@ -29,12 +37,13 @@ describe("runPipeline + complexity", () => {
 });
 
 describe("deterministic prompt builder — prose briefing style", () => {
-  it("creates a flowing prose prompt with specific expert identity for study input", () => {
+  it("creates a flowing prose prompt with an intent-driven opening for study input", () => {
     const input = "how can I learn math quickly";
     const output = buildDeterministicComposeOutput({ input, type: "study" });
 
-    // Must start with specific expert identity
-    expect(output.balanced).toMatch(/^You are a /);
+    // Must open based on user objective rather than a static role sentence
+    expect(firstSentence(output.balanced)).not.toMatch(/^You are\b/i);
+    expect(firstSentence(output.balanced)).toMatch(/math|learn|study/i);
     // Must contain domain-specific vocabulary
     expect(output.balanced).toMatch(/spaced repetition|retrieval practice|retrieval drills/i);
     // Must NOT contain template labels
@@ -54,12 +63,12 @@ describe("deterministic prompt builder — prose briefing style", () => {
     expect(output.max_pro).toMatch(/measurable|trade-off|verification/i);
   });
 
-  it("keeps short requests as flowing prose without labels", () => {
+  it("keeps short requests as flowing prose without fixed role-first intros", () => {
     const input = "fix api bug";
     const output = buildDeterministicComposeOutput({ input, type: "coding" });
 
     // Must be prose, not form
-    expect(output.balanced).toMatch(/^You are a /);
+    expect(firstSentence(output.balanced)).not.toMatch(/^You are\b/i);
     expect(output.balanced).not.toMatch(/^Task:/m);
     expect(output.balanced).not.toMatch(/^Please include:/m);
     // Must still contain domain vocabulary
@@ -87,6 +96,54 @@ describe("deterministic prompt builder — prose briefing style", () => {
     // No heading markers
     expect(output.balanced).not.toMatch(/^#{1,3}\s+/m);
   });
+
+  it("removes consultant-style boilerplate phrases from all variants", () => {
+    const output = buildDeterministicComposeOutput({
+      input: "help me improve my onboarding email",
+      type: "general",
+    });
+
+    expect(output.balanced).not.toMatch(CONSULTANT_BOILERPLATE_PATTERN);
+    expect(output.advanced).not.toMatch(CONSULTANT_BOILERPLATE_PATTERN);
+    expect(output.max_pro).not.toMatch(CONSULTANT_BOILERPLATE_PATTERN);
+  });
+
+  it("uses different first sentences when input changes", () => {
+    const outputA = buildDeterministicComposeOutput({
+      input: "improve my cold email reply rate",
+      type: "general",
+    });
+    const outputB = buildDeterministicComposeOutput({
+      input: "plan a weekly meal prep workflow",
+      type: "general",
+    });
+
+    expect(firstSentence(outputA.balanced)).not.toEqual(firstSentence(outputB.balanced));
+  });
+
+  it("adapts opening style by task type", () => {
+    const simple = buildDeterministicComposeOutput({
+      input: "summarize this note",
+      type: "general",
+    }).balanced;
+    const analytical = buildDeterministicComposeOutput({
+      input: "compare AWS and GCP pricing for a startup over 12 months",
+      type: "comparison",
+    }).balanced;
+    const creative = buildDeterministicComposeOutput({
+      input: "write a haunting opening paragraph for a gothic novel",
+      type: "creative",
+    }).balanced;
+    const technical = buildDeterministicComposeOutput({
+      input: "debug a Node API timeout issue in production",
+      type: "coding",
+    }).advanced;
+
+    expect(firstSentence(simple)).toMatch(/handle this request|focus on one practical outcome|deliver a clear, usable response/i);
+    expect(firstSentence(analytical)).toMatch(/core problem|analyze|decision problem/i);
+    expect(firstSentence(creative)).toMatch(/creative|draft|artistic|voice/i);
+    expect(firstSentence(technical)).toMatch(/judgment of|approach this with|execution brief|technical task|testable path/i);
+  });
 });
 
 describe("safety handling", () => {
@@ -103,7 +160,7 @@ describe("safety handling", () => {
       safety,
     });
 
-    expect(output.balanced).toMatch(/^You are a /);
+    expect(firstSentence(output.balanced)).not.toMatch(/^You are\b/i);
     expect(output.balanced).toMatch(/cybersecurity|security|lawful|safe/i);
     expect(output.balanced).not.toMatch(/bypass authentication|steal credentials/i);
     // Safety output should also be prose, not labeled

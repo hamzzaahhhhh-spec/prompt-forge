@@ -53,7 +53,7 @@ while ($true) {
   Clear-Host
   $now = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 
-  $nextStatus = Test-Endpoint -Url "http://localhost:3000"
+  $nextStatus = Test-Endpoint -Url "https://promptforge-virid-gamma.vercel.app/"
   $ollamaStatus = Test-Endpoint -Url "http://localhost:11434/api/tags"
   $gitSummary = Get-GitSummary
   $repoActivity = Get-RepoActivity

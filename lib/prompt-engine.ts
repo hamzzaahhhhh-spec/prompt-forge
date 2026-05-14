@@ -7,8 +7,19 @@ import type {
   VariantKey,
 } from "@/lib/types";
 
-const STYLE_TO_TYPE: Record<PromptStyle, PromptType> = {
+const STYLE_TO_TYPE: Record<PromptStyle, PromptType> & Partial<Record<string, PromptType>> = {
   general: "general",
+  coding: "coding",
+  research: "research",
+  business: "business",
+  creative: "creative",
+  image: "image",
+  study: "study",
+  recommendation: "recommendation",
+  comparison: "comparison",
+  explanation: "explanation",
+  tutorial: "tutorial",
+  troubleshooting: "troubleshooting",
 };
 
 const INJECTION_PATTERNS = [
@@ -23,6 +34,10 @@ const INJECTION_PATTERNS = [
 const GENERIC_PHRASE_PATTERNS = [
   /you are a domain expert advisor/i,
   /you are an? (elite|world[-\s]?class|top[-\s]?tier)/i,
+  /seasoned senior consultant/i,
+  /deep domain knowledge/i,
+  /ruthless practicality/i,
+  /professional who values direct and practical results/i,
   /operating at principal\+? level/i,
   /problem framing/i,
   /step-by-step action plan/i,
@@ -186,7 +201,7 @@ const DOMAIN_ROLES: Record<PromptType, string> = {
   explanation: "gifted teacher who has taught complex subjects to non-specialists at top universities and is known for making concepts click on first explanation",
   tutorial: "senior technical instructor who writes production-grade tutorials and is obsessed with ensuring every reader finishes successfully",
   troubleshooting: "veteran systems reliability engineer who has triaged hundreds of production outages and believes in diagnosis before action",
-  general: "seasoned senior consultant who combines deep domain knowledge with ruthless practicality",
+  general: "hands-on operator known for turning ambiguous requests into executable plans",
 };
 
 const DOMAIN_FOCUS: Record<PromptType, string[]> = {
@@ -388,7 +403,7 @@ const DOMAIN_AUDIENCE: Record<PromptType, string> = {
   explanation: "smart non-specialist learning a concept quickly",
   tutorial: "hands-on learner executing a task end-to-end",
   troubleshooting: "user resolving an active issue under time pressure",
-  general: "professional who values direct and practical results",
+  general: "user who wants clear next actions and usable output",
 };
 
 const DOMAIN_TONE: Record<PromptType, string> = {
@@ -855,7 +870,7 @@ function polishTopicForProse(coreTopic: string, type: PromptType): string {
   return topic || coreTopic;
 }
 
-function buildGoalText(input: string, type: PromptType, intentSpec?: IntentSpec): string {
+function buildGoalText(input: string, type: PromptType, intentSpec?: IntentSpec, qualifiers?: string[]): string {
   if (intentSpec?.goal) {
     return toSentence(intentSpec.goal);
   }
@@ -863,14 +878,18 @@ function buildGoalText(input: string, type: PromptType, intentSpec?: IntentSpec)
   const coreTopic = extractCoreTopic(input);
   const topic = polishTopicForProse(coreTopic, type);
   const timeframe = extractTimeframeSignal(input);
+  const qualifierHint = qualifiers && qualifiers.length > 0
+    ? qualifiers.slice(0, 2).join(" and ")
+    : null;
+
   const domainGoals: Partial<Record<PromptType, string>> = {
-    study: `get genuinely strong at ${topic}${timeframe ? ` as fast as possible` : ""}`,
-    coding: `diagnose and solve the technical problem around ${topic} with production-safe guidance`,
-    business: `build a decision-ready actionable plan for ${topic}`,
-    creative: `produce a polished, publishable creative output for ${topic}`,
-    research: `deliver rigorous, evidence-based guidance on ${topic}`,
+    study: `get genuinely strong at ${topic}${timeframe ? ` as fast as possible through consistent daily effort` : ""}${qualifierHint ? `, with a focus on ${qualifierHint} material` : ""}`,
+    coding: `diagnose and fix the ${qualifierHint ? qualifierHint + " " : ""}problem with ${topic} using production-safe code`,
+    business: `build a decision-ready plan for ${topic}${qualifierHint ? ` prioritizing ${qualifierHint} outcomes` : ""}`,
+    creative: `produce a polished, publishable ${qualifierHint ?? "creative"} output for ${topic}`,
+    research: `deliver rigorous, evidence-based analysis of ${topic}`,
     tutorial: `execute ${topic} step by step with confidence`,
-    troubleshooting: `diagnose and resolve the issue with ${topic}`,
+    troubleshooting: `diagnose and resolve the issue with ${topic}${timeframe ? " under time pressure" : ""}`,
     recommendation: `find the best options for ${topic} that actually fit their needs`,
     comparison: `make a well-informed decision about ${topic}`,
     explanation: `deeply understand ${topic} from first principles`,
@@ -879,12 +898,17 @@ function buildGoalText(input: string, type: PromptType, intentSpec?: IntentSpec)
   return toSentence(domainGoals[type] ?? `get a high-quality, actionable answer about ${topic}`);
 }
 
-function buildContextText(input: string, intentSpec?: IntentSpec): string {
+function buildContextText(input: string, type: PromptType, intentSpec?: IntentSpec): string {
   if (intentSpec?.context) {
     return toSentence(intentSpec.context);
   }
 
-  return toSentence(`User request: ${extractCoreTopic(input)}`);
+  const audience = DOMAIN_AUDIENCE[type] ?? DOMAIN_AUDIENCE.general;
+  const coreTopic = extractCoreTopic(input);
+  const topic = polishTopicForProse(coreTopic, type);
+  const goalRaw = buildGoalText(input, type).replace(/\.$/, "");
+
+  return toSentence(`A ${audience} is working on ${topic} and needs to ${goalRaw.toLowerCase()}`);
 }
 
 function extractTimeframeSignal(input: string): string | null {
@@ -956,6 +980,103 @@ function variantDepth(variant: VariantKey): number {
   return 1;
 }
 
+type OpeningMode = "simple" | "analytical" | "creative" | "technical";
+
+function stableHash(seed: string): number {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+function pickBySeed(options: string[], seed: string): string {
+  if (options.length === 0) {
+    return "";
+  }
+  return options[stableHash(seed) % options.length];
+}
+
+function lowerFirst(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  return `${trimmed.charAt(0).toLowerCase()}${trimmed.slice(1)}`;
+}
+
+function inferOpeningMode(type: PromptType, complexity: PromptComplexity): OpeningMode {
+  if (type === "creative" || type === "image") {
+    return "creative";
+  }
+
+  if (type === "coding" || type === "tutorial" || type === "troubleshooting") {
+    return "technical";
+  }
+
+  if (type === "research" || type === "business" || type === "comparison") {
+    return "analytical";
+  }
+
+  if (complexity === "complex") {
+    return "analytical";
+  }
+
+  return "simple";
+}
+
+function buildSafetyOpening(options: {
+  input: string;
+  variant: VariantKey;
+  type: PromptType;
+  coreTopic: string;
+  safeGoal: string;
+}): string {
+  const topic = lowerFirst(polishTopicForProse(options.coreTopic, options.type) || "the request");
+  const safeGoal = lowerFirst(options.safeGoal.replace(/\.$/, ""));
+
+  return pickBySeed(
+    [
+      `This request touches on ${topic}, so redirect it to a safe objective: ${safeGoal}.`,
+      `Because the user asked about ${topic}, pivot to lawful guidance focused on ${safeGoal}.`,
+      `Handle this safely: ${topic} appears in the request, and the right objective is to ${safeGoal}.`,
+    ],
+    `${options.input}|${options.variant}|${options.type}|${safeGoal}`,
+  );
+}
+
+function buildOpeningSentence(options: {
+  input: string;
+  type: PromptType;
+  variant: VariantKey;
+  complexity: PromptComplexity;
+  role: string;
+  goal: string;
+  coreTopic: string;
+}): string {
+  const seed = `${options.input}|${options.type}|${options.variant}`;
+  const goal = options.goal.replace(/\.$/, "").trim();
+  const lowerGoal = lowerFirst(goal);
+  const topic = lowerFirst(polishTopicForProse(options.coreTopic, options.type) || "the request");
+  const audience = DOMAIN_AUDIENCE[options.type] ?? DOMAIN_AUDIENCE.general;
+
+  // The opening sentence always follows the role sentence, so it establishes
+  // who the user is and what they need — never a generic opener.
+  // Handle "user" (consonant Y-sound) and "operator" (vowel O-sound) correctly.
+  const audienceLower = audience.toLowerCase();
+  const needsAn = /^(a[^n\s]|e|i|o[^n\s]|un)/i.test(audienceLower) && !/^(user|uni)/i.test(audienceLower);
+  const article = needsAn ? "An" : "A";
+
+  return pickBySeed(
+    [
+      `${article} ${audience} wants to ${lowerGoal}.`,
+      `${article} ${audience} needs to ${lowerGoal}.`,
+      `${article} ${audience} is working on ${topic} and wants to ${lowerGoal}.`,
+    ],
+    seed,
+  );
+}
+
 function buildConstraints(options: {
   type: PromptType;
   variant: VariantKey;
@@ -1005,6 +1126,7 @@ function buildInstructions(options: {
   complexity: PromptComplexity;
   intentSpec?: IntentSpec;
   safety?: SafetyAssessment;
+  entities?: string[];
 }): string[] {
   const depth = variantDepth(options.variant);
 
@@ -1024,9 +1146,11 @@ function buildInstructions(options: {
   );
 
   const topicSignals = collectTopicSignals(options.input);
+  const entities = options.entities ?? [];
 
   const base = DOMAIN_FOCUS[options.type] ?? DOMAIN_FOCUS.general;
-  const stepCount =
+  // FIX 5: Cap stepCount to actual domain-specific instructions available — never pad with general.
+  const rawStepCount =
     depth === 3 ? 7 : depth === 2 ? 6 : options.complexity === "complex" ? 4 : 3;
 
   const premium: string[] = [];
@@ -1040,8 +1164,12 @@ function buildInstructions(options: {
   }
 
   if (options.type === "coding") {
+    // FIX 7: Reference detected entities in instructions if domain-relevant.
+    const entityHint = entities.length > 0
+      ? ` (specifically addressing ${entities.slice(0, 2).join(" and ")} patterns such as state management, hooks, and component lifecycle where relevant)`
+      : "";
     premium.push(
-      "Request implementation-level reasoning, not abstract best-practice lists.",
+      `Request implementation-level reasoning${entityHint}, not abstract best-practice lists.`,
       "Ask for a minimal reproducible fix path before proposing larger refactors.",
       "Require explicit verification steps, including tests and failure-case checks.",
     );
@@ -1062,15 +1190,13 @@ function buildInstructions(options: {
     );
   }
 
-  const merged = takeUnique([...fromSpec, ...premium, ...base], stepCount).map((step) =>
+  const domainPool = [...fromSpec, ...premium, ...base];
+  // FIX 5: Cap to available domain-specific instructions — never pad with DOMAIN_FOCUS.general.
+  const stepCount = Math.min(rawStepCount, domainPool.length);
+
+  return takeUnique(domainPool, stepCount).map((step) =>
     toSentence(step),
   );
-
-  if (merged.length >= stepCount) {
-    return merged;
-  }
-
-  return takeUnique([...merged, ...DOMAIN_FOCUS.general], stepCount);
 }
 
 function buildAssumption(input: string, type: PromptType, intentSpec?: IntentSpec): string | null {
@@ -1094,7 +1220,22 @@ function buildOutputFormat(type: PromptType, complexity: PromptComplexity): stri
 function buildQualityBar(type: PromptType, variant: VariantKey): string {
   const base = DOMAIN_QUALITY_BAR[type] ?? DOMAIN_QUALITY_BAR.general;
   if (variant === "max_pro") {
-    return `${base} Require measurable milestones, explicit trade-offs, and zero vague filler.`;
+    // FIX 8: Domain-specific max_pro quality extension.
+    const domainMaxPro: Partial<Record<PromptType, string>> = {
+      coding: "Every code example must be production-safe, typed, and testable.",
+      study: "Every week must have a measurable checkpoint and a defined done-state.",
+      business: "Every recommendation must include a KPI, a risk, and a trigger for the fallback.",
+      research: "Every claim must cite evidence strength and flag remaining uncertainty.",
+      creative: "Every draft must sustain a consistent voice and justify structural choices.",
+      comparison: "Every option must be scored against stated criteria with transparent weighting.",
+      tutorial: "Every step must include a validation checkpoint and a recovery path if it fails.",
+      troubleshooting: "Every diagnosis must be verifiable and every fix must include a rollback safeguard.",
+      recommendation: "Every suggestion must include explicit fit rationale and a noted trade-off.",
+      explanation: "Every concept must be grounded in a practical example and address the top misconception.",
+      image: "Every prompt must specify composition, lighting, and style with no contradictory directions.",
+    };
+    const extension = domainMaxPro[type] ?? "Require measurable milestones, explicit trade-offs, and zero vague filler.";
+    return `${base} ${extension}`;
   }
   if (variant === "advanced") {
     return `${base} Include at least one explicit success criterion.`;
@@ -1133,6 +1274,269 @@ function buildToneText(type: PromptType, intentSpec?: IntentSpec): string {
   return toSentence(DOMAIN_TONE[type] ?? DOMAIN_TONE.general);
 }
 
+/**
+ * Convert a DOMAIN_FOCUS instruction (imperative sentence) into a directive
+ * fragment suitable for weaving into "Build them X, show them Y" prose.
+ * Strips leading imperatives and transforms to noun-phrase or infinitive form.
+ */
+function toDirectiveFragment(instruction: string): string {
+  let s = instruction.replace(/\.$/, "").trim();
+  // Strip leading imperative verbs that don't work after "Build them ..."
+  s = s
+    .replace(/^(Ask for|Require|Include|Provide|Request|Use|Set|Specify|Avoid|Keep|Start with|Prioritize|Design for|Define|Frame|Differentiate|State|Surface|Anchor|Address|Cover|End with)\s+/i, (_, verb) => {
+      const v = verb.toLowerCase();
+      // For some verbs, rephrase to infinitive "a ..." or noun-phrase form
+      if (v === "ask for" || v === "require" || v === "request") return "";
+      if (v === "include" || v === "provide") return "";
+      if (v === "use" || v === "design for" || v === "start with") return "";
+      if (v === "keep" || v === "avoid") return "";
+      if (v === "prioritize" || v === "anchor") return "";
+      if (v === "frame" || v === "define") return "";
+      if (v === "specify" || v === "set") return "";
+      if (v === "differentiate" || v === "state" || v === "surface") return "";
+      if (v === "cover" || v === "address") return "";
+      if (v === "end with") return "";
+      return "";
+    })
+    .trim();
+  // Ensure we have something usable
+  if (!s || s.length < 5) return instruction.replace(/\.$/, "").trim().toLowerCase();
+  return s.toLowerCase();
+}
+
+/**
+ * Build domain-specific woven instruction prose blocks.
+ * Instead of mechanically prepending "Build them" to raw instruction sentences,
+ * this produces natural directive prose per domain with failure modes embedded.
+ */
+function weaveInstructionProse(options: {
+  type: PromptType;
+  depth: number;
+  topic: string;
+  instructionTexts: string[];
+  failureModes: string[];
+  entities: string[];
+}): string[] {
+  const { type, depth, topic, instructionTexts, failureModes, entities } = options;
+  const sentences: string[] = [];
+
+  const failure0 = failureModes[0]?.replace(/^Do not /i, "never ").replace(/\.$/, "").toLowerCase() ?? "";
+  const failure1 = (failureModes[1] ?? failureModes[0])?.replace(/^Do not /i, "never ").replace(/\.$/, "").toLowerCase() ?? "";
+  const entityHint = entities.length > 0 ? entities.slice(0, 2).join(" and ") : null;
+
+  // ── Domain-specific prose blocks ──
+  // Each domain gets hand-crafted woven prose at each depth level
+  // to match the "Build them X, show them Y — never Z" pattern.
+
+  if (type === "study") {
+    if (depth === 1) {
+      sentences.push(
+        `Build them a concrete week-by-week study structure, show them exactly which topics to attack first and why the order matters — ${failure0}.`,
+      );
+    } else if (depth === 2) {
+      sentences.push(
+        `Build them a concrete week-by-week study structure with daily focus blocks, and show them exactly which topics to attack first and why the order matters — ${failure0}.`,
+      );
+      sentences.push(
+        `Include one explicit progress metric so they know the plan is working, and surface one scheduling trade-off they should decide on early.`,
+      );
+    } else {
+      sentences.push(
+        `Build them a concrete week-by-week study structure with daily focus blocks and retrieval practice baked in — ${failure0}.`,
+      );
+      sentences.push(
+        `Show them exactly which topics to attack first, why the sequence matters, and how to self-test at each checkpoint — ${failure1}.`,
+      );
+      sentences.push(
+        `Give them a clear baseline diagnostic and mastery criteria for each phase so they can adapt the plan if performance stalls.`,
+      );
+      sentences.push(
+        `Finish with a verification checklist and an explicit done-state so they know when the work is complete.`,
+      );
+    }
+    return sentences;
+  }
+
+  if (type === "coding" || type === "troubleshooting") {
+    const techTopic = entityHint ?? topic;
+    if (depth === 1) {
+      sentences.push(
+        `Start with root cause analysis of the ${techTopic} issue, then provide an exact fix with code — ${failure0}.`,
+      );
+    } else if (depth === 2) {
+      sentences.push(
+        `Start with root cause analysis of the ${techTopic} issue, provide an exact fix with code, and include a verification step the user can run immediately — ${failure0}.`,
+      );
+      sentences.push(
+        `Include one explicit success criterion so they know the fix actually works, and surface one trade-off if the fix involves architectural choices.`,
+      );
+    } else {
+      sentences.push(
+        `Start with root cause analysis of the ${techTopic} issue before proposing any fix — ${failure0}.`,
+      );
+      sentences.push(
+        `Provide an exact, minimal fix with production-ready code and explicit error handling — ${failure1}.`,
+      );
+      sentences.push(
+        `Give them verification steps including a test case and a fallback if the fix does not resolve the root cause.`,
+      );
+      sentences.push(
+        `Finish with a verification checklist and an explicit done-state so they know when the work is complete.`,
+      );
+    }
+    return sentences;
+  }
+
+  if (type === "business") {
+    if (depth === 1) {
+      sentences.push(
+        `Anchor every recommendation to a measurable KPI, and show them exactly which actions to prioritize by impact versus effort — ${failure0}.`,
+      );
+    } else if (depth === 2) {
+      sentences.push(
+        `Anchor every recommendation to a measurable KPI, show them exactly which actions to prioritize by impact versus effort, and surface the key risks — ${failure0}.`,
+      );
+      sentences.push(
+        `Include one explicit success metric they can track this quarter, and surface one strategic trade-off they need to decide on before committing resources.`,
+      );
+    } else {
+      sentences.push(
+        `Anchor every recommendation to a measurable KPI and rank actions by impact versus execution effort — ${failure0}.`,
+      );
+      sentences.push(
+        `Surface risks, dependencies, and stakeholder alignment issues explicitly — ${failure1}.`,
+      );
+      sentences.push(
+        `Give them a primary recommendation and one fallback strategy with trigger conditions for when to switch.`,
+      );
+      sentences.push(
+        `Finish with a verification checklist and an explicit done-state so they know when the work is complete.`,
+      );
+    }
+    return sentences;
+  }
+
+  if (type === "comparison") {
+    const comparisonTopic = entityHint ?? topic;
+    if (depth === 1) {
+      sentences.push(
+        `Define comparison criteria before ranking ${comparisonTopic}, and finish with a clear recommendation stating where each option wins — ${failure0}.`,
+      );
+    } else if (depth === 2) {
+      sentences.push(
+        `Define weighted comparison criteria before ranking ${comparisonTopic}, show where each option wins and where it loses, and finish with a defensible recommendation — ${failure0}.`,
+      );
+      sentences.push(
+        `Include one explicit decision metric and surface the top trade-off the user needs to resolve before committing.`,
+      );
+    } else {
+      sentences.push(
+        `Define weighted comparison criteria and score each option against them transparently — ${failure0}.`,
+      );
+      sentences.push(
+        `Show exactly where each option wins, where it breaks down, and what the switching costs are — ${failure1}.`,
+      );
+      sentences.push(
+        `Give them a final recommendation with stated confidence and a trigger condition for revisiting the decision.`,
+      );
+      sentences.push(
+        `Finish with a verification checklist and an explicit done-state so they know when the work is complete.`,
+      );
+    }
+    return sentences;
+  }
+
+  if (type === "creative") {
+    if (depth === 1) {
+      sentences.push(
+        `Produce a polished draft with a clear voice and intentional pacing, and show them exactly how structural choices serve the piece — ${failure0}.`,
+      );
+    } else if (depth === 2) {
+      sentences.push(
+        `Produce a polished draft with a clear voice, intentional pacing, and structural intent, then show them how each choice serves the emotional arc — ${failure0}.`,
+      );
+      sentences.push(
+        `Include one revision note tied to voice consistency, and surface one structural trade-off worth considering.`,
+      );
+    } else {
+      sentences.push(
+        `Produce a polished draft with a distinct, sustained voice and intentional pacing — ${failure0}.`,
+      );
+      sentences.push(
+        `Show them exactly how structural choices serve the emotional arc and where the piece could strengthen — ${failure1}.`,
+      );
+      sentences.push(
+        `Give them targeted revision notes tied to craft, not taste, so they can iterate with precision.`,
+      );
+      sentences.push(
+        `Finish with a clear done-state defining what publishable quality looks like for this piece.`,
+      );
+    }
+    return sentences;
+  }
+
+  if (type === "research") {
+    if (depth === 1) {
+      sentences.push(
+        `Frame the research question clearly, synthesize the best available evidence, and flag limitations — ${failure0}.`,
+      );
+    } else if (depth === 2) {
+      sentences.push(
+        `Frame the research question, synthesize evidence with source-quality markers, and state limitations and confidence levels — ${failure0}.`,
+      );
+      sentences.push(
+        `Include one explicit success criterion for evidence quality, and surface one methodological trade-off worth noting.`,
+      );
+    } else {
+      sentences.push(
+        `Frame the research question precisely and differentiate strong evidence from weak evidence — ${failure0}.`,
+      );
+      sentences.push(
+        `Synthesize findings with explicit confidence levels and state limitations clearly — ${failure1}.`,
+      );
+      sentences.push(
+        `Give them a concise actionable conclusion, not just a source list, so they can make a decision based on the synthesis.`,
+      );
+      sentences.push(
+        `Finish with a verification checklist and an explicit done-state so they know when the work is complete.`,
+      );
+    }
+    return sentences;
+  }
+
+  // ── Generic fallback for remaining types ──
+  // Convert instructions to directive fragments and weave with failure modes.
+  const frags = instructionTexts.slice(0, depth === 3 ? 3 : 2).map((t) => toDirectiveFragment(t));
+
+  if (depth === 1 && frags.length >= 2) {
+    sentences.push(
+      `Build them ${frags[0]}, and show them exactly ${frags[1]} — ${failure0}.`,
+    );
+  } else if (depth === 2 && frags.length >= 2) {
+    sentences.push(
+      `Build them ${frags[0]}, and show them exactly ${frags[1]} — ${failure0}.`,
+    );
+    sentences.push(
+      `Include one explicit success metric so they know it is working, and surface one key trade-off they should decide on before committing.`,
+    );
+  } else {
+    if (frags[0]) {
+      sentences.push(`Build them ${frags[0]} — ${failure0}.`);
+    }
+    if (frags[1]) {
+      sentences.push(`Show them exactly ${frags[1]} — ${failure1}.`);
+    }
+    if (frags[2]) {
+      sentences.push(`Give them ${frags[2]} so they can verify progress at every stage.`);
+    }
+    sentences.push(
+      `Finish with a verification checklist and an explicit done-state so they know when the work is complete.`,
+    );
+  }
+
+  return sentences;
+}
+
 function buildDeterministicPrompt(options: DeterministicPromptBuildOptions): string {
   const depth = variantDepth(options.variant);
   const role = DOMAIN_ROLES[options.type] ?? DOMAIN_ROLES.general;
@@ -1140,12 +1544,25 @@ function buildDeterministicPrompt(options: DeterministicPromptBuildOptions): str
   const topicSignals = collectTopicSignals(options.input);
   const failureModes = DOMAIN_FAILURE_MODES[options.type] ?? DOMAIN_FAILURE_MODES.general;
   const coreTopic = topicSignals.topic;
-  const tone = buildToneText(options.type, options.intentSpec).replace(/\.$/, "");
+  const tone = DOMAIN_TONE[options.type] ?? DOMAIN_TONE.general;
+  const audience = DOMAIN_AUDIENCE[options.type] ?? DOMAIN_AUDIENCE.general;
+  const entities = extractEntities(options.input);
+  const qualifiers = extractQualifiers(options.input);
+  const goalRaw = buildGoalText(options.input, options.type, options.intentSpec, qualifiers).replace(/\.$/, "");
+  const topic = polishTopicForProse(coreTopic, options.type);
 
   // Safety-blocked: produce a safe-redirect briefing
   if (options.safety?.blocked) {
     const sentences: string[] = [];
-    sentences.push(`You are a ${role}.`);
+    sentences.push(
+      buildSafetyOpening({
+        input: options.input,
+        variant: options.variant,
+        type: options.type,
+        coreTopic,
+        safeGoal: options.safety.safeGoal,
+      }),
+    );
     sentences.push(`A user has asked about something that touches on ${coreTopic}, but the real need here is to ${options.safety.safeGoal}.`);
     sentences.push(`Explain the risks at a high level without giving harmful operational details, provide lawful alternatives and prevention strategies, and include trusted support resources where relevant.`);
     sentences.push(`Keep the tone calm, respectful, and non-judgmental — never preachy.`);
@@ -1153,73 +1570,96 @@ function buildDeterministicPrompt(options: DeterministicPromptBuildOptions): str
     return sentences.join(" ");
   }
 
-  // Build the natural-prose briefing
+  // ── Get raw instruction data ──
+  const instructions = buildInstructions({ ...options, entities });
+  const instructionTexts = instructions.map((s) => s.replace(/\.$/, ""));
+
+  // ── Domain-specific anti-generic signal (FIX 1 Rule 2) ──
+  const antiGeneric: Partial<Record<PromptType, string>> = {
+    study: "They need a real plan that survives a busy schedule, not motivation.",
+    coding: "No walkthroughs — they need an implementation-ready fix they can ship.",
+    business: "Skip the framework theory — they need a decision they can execute this week.",
+    creative: "No brainstorming lists — they need a single polished draft with real voice.",
+    research: "No surface summaries — they need evidence-weighted synthesis with stated uncertainty.",
+    tutorial: "No abstract overviews — they need steps they can execute and verify right now.",
+    troubleshooting: "No generic checklists — they need a diagnosis path that isolates the root cause fast.",
+    comparison: "No neutral both-are-great hedging — they need a defensible recommendation with trade-offs.",
+    recommendation: "No obvious suggestions — they need curated options with clear fit rationale.",
+    explanation: "No textbook dumps — they need the concept to click on first read.",
+    image: "No vague moods — they need precise composition, lighting, and style direction.",
+    general: "They need a concrete, specific answer — not a summary of possibilities.",
+  };
+
+  // ── Domain-specific closing line (FIX 1 Rule 5) ──
+  const closingLines: Partial<Record<PromptType, string>> = {
+    study: `Deliver this as direct coaching built for a learner who is serious about real progress, not just going through the motions.`,
+    coding: `Deliver this as an engineer speaking to another engineer — precise, implementation-first, and testable.`,
+    business: `Deliver this as a strategist briefing an operator — direct, outcome-anchored, and execution-ready.`,
+    creative: `Deliver this as an editor who respects the craft — intentional, voice-aware, and never generic.`,
+    research: `Deliver this as an analyst briefing a decision-maker — evidence-first, uncertainty-aware, and actionable.`,
+    tutorial: `Deliver this as a senior instructor guiding a hands-on learner — stepwise, testable, and zero ambiguity.`,
+    troubleshooting: `Deliver this as a senior SRE triaging a live issue — calm, diagnostic, and resolution-focused.`,
+    comparison: `Deliver this as a decision scientist presenting to someone who needs to choose this week — structured, weighted, and conclusive.`,
+    recommendation: `Deliver this as a trusted curator who has done the filtering — opinionated, justified, and fit-focused.`,
+    explanation: `Deliver this as a gifted teacher who makes hard things click — plain language, accurate, and misconception-aware.`,
+    image: `Deliver this as a veteran art director specifying a shot — cinematic, precise, and production-ready.`,
+    general: `Deliver this as ${tone} guidance built for someone who wants the answer, not the preamble.`,
+  };
+
+  // ── Assemble the briefing ──
   const sentences: string[] = [];
 
-  // 1. Sharp specific identity
+  // Sentence 1: Always open with the role (FIX 1 Rule 1)
   sentences.push(`You are a ${role}.`);
 
-  // 2. Who the user is and what they actually need
-  const audienceRaw = buildAudienceText(options.type, options.intentSpec).replace(/\.$/, "");
-  // Use the goal builder WITHOUT timeframe (we add timeframe in the sentence ourselves)
-  const goalFromSpec = options.intentSpec?.goal
-    ? options.intentSpec.goal.replace(/\.$/, "")
-    : null;
-  const goalFromBuilder = buildGoalText(options.input, options.type).replace(/\.$/, "");
-  // Strip any residual timeframe from the goal to avoid duplication
-  const goalRaw = (goalFromSpec ?? goalFromBuilder).replace(/\s+within\s+a fast timeline/gi, "");
+  // Sentence 2: Who the user is and what they need
+  sentences.push(
+    buildOpeningSentence({
+      input: options.input,
+      type: options.type,
+      variant: options.variant,
+      complexity: options.complexity,
+      role,
+      goal: goalRaw,
+      coreTopic,
+    }),
+  );
 
-  // Pick proper article: "A" or "An" based on first character
-  const firstChar = audienceRaw.charAt(0).toLowerCase();
-  const article = "aeiou".includes(firstChar) ? "An" : "A";
-
-  if (topicSignals.timeframe) {
-    sentences.push(`${article} ${audienceRaw.toLowerCase()} wants to ${goalRaw.toLowerCase()} through consistent effort.`);
-  } else {
-    sentences.push(`${article} ${audienceRaw.toLowerCase()} needs you to ${goalRaw.toLowerCase()}.`);
+  // FIX 1 Rule 2: Domain-derived anti-generic signal (never the hardcoded universal)
+  if (depth <= 2) {
+    sentences.push(antiGeneric[options.type] ?? antiGeneric.general!);
   }
 
-  // 3. What they don't need (anti-generic signal)
-  sentences.push(`They do not need generic encouragement or surface-level advice — they need a real, actionable answer that holds up under scrutiny.`);
+  // FIX 1 Rules 3-4: Woven instruction prose with failure modes embedded
+  const wovenProse = weaveInstructionProse({
+    type: options.type,
+    depth,
+    topic,
+    instructionTexts,
+    failureModes,
+    entities,
+  });
+  sentences.push(...wovenProse);
 
-  // 4. Core instructions woven as prose
-  const instructions = buildInstructions(options);
-  const instructionBlock = instructions
-    .map((inst) => inst.replace(/\.$/, "").toLowerCase())
-    .join(", ");
-  sentences.push(`${instructionBlock.charAt(0).toUpperCase() + instructionBlock.slice(1)}.`);
-
-  // 5. Assumption if needed (natural, not labeled)
+  // Assumption if needed (natural, not labeled)
   if (assumption) {
-    // Strip leading "Assume " since we prefix with "assume" ourselves
     const cleanedAssumption = assumption.replace(/\.$/, "").replace(/^assume\s+/i, "").toLowerCase();
     sentences.push(`Where details are missing, assume ${cleanedAssumption}.`);
   }
 
-  // 6. Depth escalation for advanced/max_pro
-  if (depth >= 2) {
-    const constraints = buildConstraints(options);
-    const constraintProse = constraints
-      .slice(0, depth === 3 ? 4 : 2)
-      .map((c) => c.replace(/\.$/, "").toLowerCase())
-      .join(", ");
-    sentences.push(`Be ruthlessly specific — ${constraintProse}.`);
+  // Domain-specific measurable signal line
+  const signalLines: Partial<Record<PromptType, string>> = {
+    study: "Give them clear measurable signals so they know they are improving, not just busy.",
+    coding: "Give them a way to verify the fix works before merging.",
+    business: "Give them one leading indicator they can track this week to confirm momentum.",
+    troubleshooting: "Give them a verification step to confirm the issue is actually resolved.",
+  };
+  if (signalLines[options.type] && depth >= 1) {
+    sentences.push(signalLines[options.type]!);
   }
 
-  if (depth === 3) {
-    sentences.push(`Every major recommendation must include a measurable success criterion, call out key trade-offs explicitly, and finish with a verification checklist the user can execute immediately.`);
-  }
-
-  // 7. Failure modes woven naturally
-  const failureCount = depth === 3 ? 2 : 1;
-  const failureProse = failureModes
-    .slice(0, failureCount)
-    .map((f) => f.replace(/^Do not /i, "never ").replace(/\.$/, "").toLowerCase())
-    .join(" and ");
-  sentences.push(`Never ${failureProse.replace(/^never /i, "")}.`);
-
-  // 8. Tone and delivery direction
-  sentences.push(`Deliver this as ${tone} guidance — sharp, dense, and built for someone who is serious.`);
+  // FIX 1 Rule 5: Sharp domain-specific closing line
+  sentences.push(closingLines[options.type] ?? closingLines.general!);
 
   return sentences.join(" ");
 }
@@ -1232,8 +1672,9 @@ export function buildHeuristicIntentSpec(options: {
 }): IntentSpec {
   const complexity = options.complexity ?? inferPromptComplexity(options.input);
   const safety = options.safety;
-  const goal = buildGoalText(options.input, options.type);
-  const context = buildContextText(options.input);
+  const qualifiers = extractQualifiers(options.input);
+  const goal = buildGoalText(options.input, options.type, undefined, qualifiers);
+  const context = buildContextText(options.input, options.type);
   const audience = buildAudienceText(options.type);
   const tone = buildToneText(options.type);
 
@@ -1302,13 +1743,13 @@ function detectRepetitionRatio(prompt: string): number {
 
 function countExecutionSignals(prompt: string): number {
   const checks = [
-    /\byou are a\b/i,
+    /\b(core problem|objective|focus on|handle this request|treat this as|analyze)\b/i,
     /\b(wants?|needs?) (to|you to)\b/i,
     /\b(do not need|they do not|does not need)\b/i,
-    /\b(deliver|provide|build|create|show|give|tell)\b.*\b(as|this|them|it)\b/i,
+    /\b(deliver|provide|build|create|show|give|tell|resolve|analyze|treat)\b/i,
     /\b(never|avoid|do not|must not)\b/i,
-    /\b(specific|ruthless|concrete|measurable|precise)\b/i,
-    /\b(sharp|dense|serious|commanding|confident)\b/i,
+    /\b(specific|concrete|measurable|precise|actionable)\b/i,
+    /\b(sharp|dense|serious|commanding|confident|clear|practical)\b/i,
   ];
 
   return checks.reduce((score, check) => (check.test(prompt) ? score + 1 : score), 0);
@@ -1325,6 +1766,14 @@ export function inferPromptComplexity(input: string): PromptComplexity {
       words >= 10);
 
   if (words >= 16 || hasComplexSignals) {
+    return "complex";
+  }
+
+  // FIX 6: Domain-based complexity override — these domains always produce
+  // substantial output regardless of input word count.
+  const detectedType = classifyPromptType(normalized);
+  const substantiveDomains: PromptType[] = ["study", "coding", "business", "research", "comparison"];
+  if (substantiveDomains.includes(detectedType)) {
     return "complex";
   }
 
@@ -1602,7 +2051,11 @@ export function evaluateEngineeredPrompt(options: {
     7 +
       Math.min(8, executionSignals * 2) +
       Math.min(4, Math.floor(promptWords / 40)) +
-      (/\byou are a\b/i.test(normalizedPrompt) ? 3 : 0) -
+      (/\b(core problem|objective|focus on|handle this request|treat this as)\b/i.test(
+        normalizedPrompt,
+      )
+        ? 3
+        : 0) -
       (repetitionRatio > maxRepetitionRatio ? 3 : 0),
     0,
     25,

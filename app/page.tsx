@@ -1,15 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { Clock3, Columns2, Sparkles } from "lucide-react";
 
+import { CustomCursor } from "@/components/CustomCursor";
+import { ScrollProgress } from "@/components/ScrollProgress";
+import { LoadingScreen } from "@/components/LoadingScreen";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { ModeSelector } from "@/components/ModeSelector";
 import { PromptInput } from "@/components/PromptInput";
 import { PromptOutput } from "@/components/PromptOutput";
-import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { usePromptStore } from "@/lib/store";
 import type {
   PromptMode,
@@ -19,7 +21,6 @@ import type {
   VariantKey,
 } from "@/lib/types";
 
-const PAGE_STAGGER = 0.06;
 const WELCOME_KEY = "promptforge:welcome-complete";
 
 export default function Home() {
@@ -52,7 +53,9 @@ export default function Home() {
 
   const [activeStage, setActiveStage] = useState<string>("idle");
   const [isHydrated, setIsHydrated] = useState(false);
-  const [welcomeState, setWelcomeState] = useState<"loading" | "visible" | "exiting" | "hidden">("loading");
+  const [showLoading, setShowLoading] = useState(true);
+  const [navScrolled, setNavScrolled] = useState(false);
+  const heroRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     hydrateHistory();
@@ -62,49 +65,64 @@ export default function Home() {
     setIsHydrated(true);
   }, []);
 
+  // Check if user has seen loading screen
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const seenWelcome = window.localStorage.getItem(WELCOME_KEY) === "1";
-    setWelcomeState(seenWelcome ? "hidden" : "visible");
+    if (typeof window === "undefined") return;
+    const seen = window.localStorage.getItem(WELCOME_KEY) === "1";
+    if (seen) setShowLoading(false);
   }, []);
 
-  const handleWelcomeContinue = useCallback(() => {
-    if (welcomeState !== "visible") {
-      return;
+  // Nav scroll detection
+  useEffect(() => {
+    const onScroll = () => {
+      setNavScrolled(window.scrollY > 100);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Hero text word-by-word reveal with IntersectionObserver
+  useEffect(() => {
+    if (!heroRef.current) return;
+    const words = heroRef.current.querySelectorAll(".word");
+    if (!words.length) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            words.forEach((word, i) => {
+              setTimeout(() => {
+                (word as HTMLElement).style.transform = "translateY(0)";
+                (word as HTMLElement).style.opacity = "1";
+              }, i * 80);
+            });
+            observer.disconnect();
+          }
+        });
+      },
+      { threshold: 0.3 },
+    );
+    observer.observe(heroRef.current);
+
+    return () => observer.disconnect();
+  }, [isHydrated, showLoading]);
+
+  const handleLoadingComplete = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(WELCOME_KEY, "1");
     }
+    setShowLoading(false);
+  }, []);
 
-    setWelcomeState("exiting");
-
-    window.setTimeout(() => {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(WELCOME_KEY, "1");
-      }
-      setWelcomeState("hidden");
-    }, 620);
-  }, [welcomeState]);
-
-  const welcomeVisible = welcomeState === "visible" || welcomeState === "exiting";
-
-  const selectedPrompt = useMemo(() => {
-    if (!result) {
-      return "";
-    }
-
+  const selectedPrompt = (() => {
+    if (!result) return "";
     const variant = result.variants[selectedVariant] ?? result.prompt;
-    if (!variant) {
-      return result.prompt;
-    }
-
-    return variant;
-  }, [result, selectedVariant]);
+    return variant || result.prompt;
+  })();
 
   const onTransform = useCallback(async () => {
-    if (isStreaming || inputText.trim().length < 4) {
-      return;
-    }
+    if (isStreaming || inputText.trim().length < 4) return;
 
     clearError();
     setIsStreaming(true);
@@ -115,14 +133,8 @@ export default function Home() {
     try {
       const response = await fetch("/api/transform", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: inputText,
-          mode,
-          style,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: inputText, mode, style }),
       });
 
       if (!response.ok) {
@@ -148,9 +160,7 @@ export default function Home() {
         buffer = lines.pop() ?? "";
 
         for (const line of lines) {
-          if (!line.trim()) {
-            continue;
-          }
+          if (!line.trim()) continue;
 
           const event = JSON.parse(line) as StreamEvent;
 
@@ -172,9 +182,7 @@ export default function Home() {
           }
         }
 
-        if (done) {
-          break;
-        }
+        if (done) break;
       }
     } catch (requestError) {
       const message =
@@ -198,160 +206,201 @@ export default function Home() {
   ]);
 
   const onModeChange = useCallback(
-    (nextMode: PromptMode) => {
-      setMode(nextMode);
-    },
+    (nextMode: PromptMode) => setMode(nextMode),
     [setMode],
   );
 
   const onStyleChange = useCallback(
-    (nextStyle: PromptStyle) => {
-      setStyle(nextStyle);
-    },
+    (nextStyle: PromptStyle) => setStyle(nextStyle),
     [setStyle],
   );
 
   const onVariantChange = useCallback(
-    (key: VariantKey) => {
-      setSelectedVariant(key);
-    },
+    (key: VariantKey) => setSelectedVariant(key),
     [setSelectedVariant],
   );
 
-  if (!isHydrated) {
-    return null;
-  }
+  if (!isHydrated) return null;
+
+  // Split hero text into words for animation
+  const heroWords = "Paste any text.\nForge a masterful\nAI prompt.".split(/(\s+)/);
 
   return (
     <>
+      {/* ── Custom cursor ── */}
+      <CustomCursor />
+
+      {/* ── Scroll progress bar ── */}
+      <ScrollProgress />
+
+      {/* ── Loading screen ── */}
       <AnimatePresence>
-        {welcomeVisible ? (
-          <WelcomeScreen
-            isExiting={welcomeState === "exiting"}
-            onContinue={handleWelcomeContinue}
-          />
+        {showLoading ? (
+          <LoadingScreen onComplete={handleLoadingComplete} />
         ) : null}
       </AnimatePresence>
 
+      {/* ── Main app ── */}
       <motion.div
-        animate={{
-          opacity: welcomeVisible ? 0.28 : 1,
-          scale: welcomeVisible ? 0.986 : 1,
-          // No filter:blur — it forces GPU compositing of the entire subtree,
-          // which is catastrophic on mobile (causes 100+ ms frame drops).
-        }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-        className={`relative pb-16 ${welcomeVisible ? "pointer-events-none select-none" : ""}`}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: showLoading ? 0 : 1 }}
+        transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
       >
-      <motion.header
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: "easeOut" }}
-        className="fixed inset-x-0 top-0 z-40 border-b border-border/80 bg-surface/75 backdrop-blur-md"
-        style={{ paddingTop: "env(safe-area-inset-top)" }}
-      >
-        <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between px-3 sm:h-16 sm:px-6 lg:h-20 lg:px-8">
-          <button
-            type="button"
-            className="group inline-flex items-center gap-2 rounded-full border border-border bg-surface/80 px-4 py-2 text-sm text-text-muted transition duration-150 hover:scale-[1.01] hover:text-text active:scale-[0.97]"
-          >
-            <Sparkles className="h-4 w-4 text-primary transition-transform duration-300 group-hover:rotate-12" />
-            <span className="bg-gradient-to-r from-text via-primary to-accent bg-clip-text text-lg font-semibold text-transparent">
-              PromptForge
-            </span>
-          </button>
-
-          <div className="flex items-center gap-2 sm:gap-3">
+        {/* ═══════ NAVIGATION ═══════ */}
+        <header
+          className={`nav-glass fixed inset-x-0 top-0 z-40 ${navScrolled ? "scrolled" : ""}`}
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
+        >
+          <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 sm:h-18 sm:px-6 lg:h-20 lg:px-8">
+            {/* Logo */}
             <button
               type="button"
-              onClick={() => setCompareView(!compareView)}
-              className={`inline-flex h-10 items-center gap-2 rounded-full border px-4 text-xs font-medium uppercase tracking-[0.08em] transition duration-150 hover:scale-[1.01] active:scale-[0.97] ${
-                compareView
-                  ? "border-primary/60 bg-primary/15 text-primary"
-                  : "border-border bg-surface/70 text-text-muted"
-              }`}
+              className="magnetic group inline-flex items-center gap-2.5"
+              id="nav-logo"
             >
-              <Columns2 className="h-4 w-4" />
-              Compare
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/10 ring-1 ring-accent/20 transition-all duration-300 group-hover:bg-accent/20 group-hover:ring-accent/40">
+                <Sparkles className="h-4 w-4 text-accent" />
+              </span>
+              <span className="text-lg font-bold tracking-tight text-text">
+                Prompt<span className="text-accent">Forge</span>
+              </span>
             </button>
 
-            <ModeSelector mode={mode} onChange={onModeChange} />
+            {/* Nav actions */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button
+                type="button"
+                onClick={() => setCompareView(!compareView)}
+                id="nav-compare"
+                className={`btn-ghost btn-liquid magnetic inline-flex h-10 items-center gap-2 rounded-xl px-4 text-xs font-medium uppercase tracking-widest transition duration-200 ${
+                  compareView
+                    ? "!border-accent/40 !bg-accent/10 !text-accent"
+                    : ""
+                }`}
+              >
+                <Columns2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Compare</span>
+              </button>
 
-            <Link
-              href="/admin"
-              className="inline-flex h-10 items-center rounded-full border border-border bg-surface/70 px-4 text-xs font-medium uppercase tracking-[0.08em] text-text-muted transition duration-150 hover:scale-[1.01] hover:text-text active:scale-[0.97]"
-            >
-              Admin
-            </Link>
+              <ModeSelector mode={mode} onChange={onModeChange} />
 
-            <button
-              type="button"
-              onClick={() => setHistoryOpen(!historyOpen)}
-              aria-label="Open history"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface/80 text-text-muted transition duration-150 hover:scale-[1.01] hover:bg-white/[0.06] hover:text-text active:scale-[0.97]"
-            >
-              <Clock3 className="h-4 w-4" />
-            </button>
+              <Link
+                href="/admin"
+                id="nav-admin"
+                className="btn-ghost btn-liquid magnetic inline-flex h-10 items-center rounded-xl px-4 text-xs font-medium uppercase tracking-widest transition duration-200"
+              >
+                Admin
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(!historyOpen)}
+                aria-label="Open history"
+                id="nav-history"
+                className="btn-ghost btn-liquid magnetic inline-flex h-10 w-10 items-center justify-center rounded-xl transition duration-200"
+              >
+                <Clock3 className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-        </div>
-      </motion.header>
+        </header>
 
-      <main
-        className="mx-auto w-full max-w-7xl px-3 pt-20 sm:px-6 sm:pt-24 lg:px-8 lg:pt-28"
-        style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom))" }}
-      >
-        <div className="mb-8 max-w-3xl">
-          <h1 className="text-balance text-[clamp(28px,5vw,56px)] font-bold leading-[1.08] text-text">
-            Paste any text. Forge a masterful AI prompt.
-          </h1>
-          <p className="mt-4 max-w-2xl text-base leading-relaxed text-text-muted">
-            PromptForge transforms rough input into structured, high-quality prompts.
-            It never answers your pasted content and always outputs prompt-ready text.
-          </p>
-        </div>
+        {/* ═══════ HERO SECTION ═══════ */}
+        <main
+          className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8"
+          style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom))" }}
+        >
+          <div className="pt-32 sm:pt-36 lg:pt-44">
+            {/* Hero headline — word by word reveal */}
+            <div className="mb-16 max-w-4xl" ref={heroRef}>
+              <h1 className="text-hero leading-[0.95]">
+                {heroWords.map((word, i) =>
+                  word === "\n" ? (
+                    <br key={`br-${i}`} />
+                  ) : word.trim() === "" ? (
+                    <span key={`space-${i}`}> </span>
+                  ) : (
+                    <span key={`word-${i}`} className="inline-block overflow-hidden">
+                      <span
+                        className="word inline-block"
+                        style={{
+                          transform: "translateY(100%)",
+                          opacity: 0,
+                          transition: `transform 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94)`,
+                        }}
+                      >
+                        {word}
+                      </span>
+                    </span>
+                  ),
+                )}
+              </h1>
 
-        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-10">
-          <motion.section
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.38, delay: PAGE_STAGGER, ease: "easeOut" }}
-            className="lg:col-span-4"
-          >
-            <PromptInput
-              value={inputText}
-              style={style}
-              onChange={setInputText}
-              onStyleChange={onStyleChange}
-              onTransform={onTransform}
-              isStreaming={isStreaming}
-              activeStage={activeStage}
-            />
-          </motion.section>
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.2, duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] }}
+                className="mt-8 max-w-2xl text-body text-text-secondary"
+              >
+                PromptForge transforms rough input into structured, high-quality prompts.
+                It never answers your pasted content — always outputs prompt-ready text.
+              </motion.p>
+            </div>
 
-          <motion.section
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.38, delay: PAGE_STAGGER + 0.08, ease: "easeOut" }}
-            className="lg:col-span-6"
-          >
-            <PromptOutput
-              inputText={inputText}
-              result={result}
-              selectedPrompt={selectedPrompt}
-              selectedVariant={selectedVariant}
-              compareView={compareView}
-              streamPrompt={streamPrompt}
-              isStreaming={isStreaming}
-              error={error}
-              showExplain={showExplain}
-              onVariantChange={onVariantChange}
-              onToggleExplain={() => setShowExplain(!showExplain)}
-            />
-          </motion.section>
-        </div>
-      </main>
+            {/* ═══════ WORKSPACE GRID ═══════ */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-10 lg:gap-8">
+              {/* Input card */}
+              <motion.section
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.8,
+                  delay: 1.4,
+                  ease: [0.25, 0.46, 0.45, 0.94],
+                }}
+                className="lg:col-span-4"
+              >
+                <PromptInput
+                  value={inputText}
+                  style={style}
+                  onChange={setInputText}
+                  onStyleChange={onStyleChange}
+                  onTransform={onTransform}
+                  isStreaming={isStreaming}
+                  activeStage={activeStage}
+                />
+              </motion.section>
 
-      <HistoryPanel />
+              {/* Output card */}
+              <motion.section
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.8,
+                  delay: 1.5,
+                  ease: [0.25, 0.46, 0.45, 0.94],
+                }}
+                className="lg:col-span-6"
+              >
+                <PromptOutput
+                  inputText={inputText}
+                  result={result}
+                  selectedPrompt={selectedPrompt}
+                  selectedVariant={selectedVariant}
+                  compareView={compareView}
+                  streamPrompt={streamPrompt}
+                  isStreaming={isStreaming}
+                  error={error}
+                  showExplain={showExplain}
+                  onVariantChange={onVariantChange}
+                  onToggleExplain={() => setShowExplain(!showExplain)}
+                />
+              </motion.section>
+            </div>
+          </div>
+        </main>
+
+        <HistoryPanel />
       </motion.div>
     </>
   );

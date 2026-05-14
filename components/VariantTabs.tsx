@@ -18,8 +18,9 @@ const TABS: Array<{ key: VariantKey; label: string }> = [
 
 export function VariantTabs({ value, promptType, onChange }: VariantTabsProps) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
-      <div className="relative flex items-center gap-1 rounded-full border border-border bg-white/[0.02] p-1">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Tabs */}
+      <div className="relative flex items-center gap-0.5 rounded-xl border border-border bg-surface/50 p-1">
         {TABS.map((tab) => {
           const active = tab.key === value;
 
@@ -28,15 +29,20 @@ export function VariantTabs({ value, promptType, onChange }: VariantTabsProps) {
               key={tab.key}
               type="button"
               onClick={() => onChange(tab.key)}
-              className={`relative z-10 h-9 rounded-full px-4 text-xs font-medium uppercase tracking-[0.08em] transition duration-150 hover:scale-[1.01] active:scale-[0.97] ${
-                active ? "text-text" : "text-text-muted"
+              className={`magnetic relative z-10 h-9 rounded-lg px-4 text-xs font-medium uppercase tracking-widest transition duration-200 ${
+                active ? "text-text" : "text-text-secondary hover:text-text"
               }`}
             >
               {active ? (
                 <motion.span
-                  layoutId="variant-underline"
-                  className="absolute inset-0 -z-10 rounded-full bg-primary/20"
-                  transition={{ type: "spring", stiffness: 280, damping: 28 }}
+                  layoutId="variant-indicator"
+                  className="absolute inset-0 -z-10 rounded-lg"
+                  style={{
+                    background: "var(--accent)",
+                    opacity: 0.12,
+                    boxShadow: "0 0 20px var(--accent-glow)",
+                  }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 />
               ) : null}
               {tab.label}
@@ -45,8 +51,9 @@ export function VariantTabs({ value, promptType, onChange }: VariantTabsProps) {
         })}
       </div>
 
-      <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 font-mono text-xs uppercase tracking-[0.08em] text-text-muted">
-        <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+      {/* Type tag */}
+      <div className="tag">
+        <span className="tag-dot" />
         {promptType}
       </div>
     </div>
